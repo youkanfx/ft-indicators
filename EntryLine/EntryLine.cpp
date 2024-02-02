@@ -70,6 +70,16 @@ string create_objname(string prefix, int index);
 string create_vline(int objIndex, Trade trade);
 string create_hline(int objIndex, Trade trade);
 bool is_summertime(string date);
+int day_of_week(int year, int month, int day);
+enum WeekDay {
+    Sun = 0,
+    Mon = 1,
+    Tue = 2,
+    Wed = 3,
+    Thu = 4,
+    Fri = 5,
+    Sat = 6
+};
 
 //---------------------------------------------------------------------------
 // Initialize indicator
@@ -265,6 +275,13 @@ double datestring_to_double(string str) {
     double sd = sda + sdb + sdc;
 
     double se = sm + sd;
+
+    if (is_summertime(str)) {
+        double ajust = 1 * 3600 / 86400;
+        se -= ajust;
+        Print("EntryLine: Today is SummerTime: " + to_string(se));
+    }
+
     return se;
 }
 
@@ -401,4 +418,65 @@ bool is_summertime(string date) {
     int year = atoi(date.substr(0, 4).c_str());
     int day = atoi(date.substr(8, 2).c_str());
     double hour = std::stod(date.substr(11, 2));
+    // USTF3Œ‘æ2“ú—j“úAM2:00`11Œ‘æ1“ú—j“úAM2:00
+    if (month == 3) {
+        int ustStartDay = 0;
+        int sunCount = 0;
+        for (int d = 1; d <= 31; d++) {
+            int week = day_of_week(year, month, d);
+            if (week == WeekDay::Sun) {
+                sunCount++;
+                if (sunCount == 2) {
+                    ustStartDay = d;
+                    break;
+                }
+            }
+        }
+
+        if (ustStartDay < day) {
+            return true;
+        }
+        else if (ustStartDay == day && hour >= 2) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else if (month == 11) {
+        int ustEndDay = 0;
+        int sunCount = 0;
+        for (int d = 1; d <= 31; d++) {
+            int week = day_of_week(year, month, d);
+            if (week == WeekDay::Sun) {
+                sunCount++;
+                if (sunCount == 1) {
+                    ustEndDay = d;
+                    break;
+                }
+            }
+        }
+
+        if (ustEndDay > day) {
+            return true;
+        }
+        else if (ustEndDay == day && hour <= 1) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    return false;
+}
+
+int day_of_week(int year, int month, int day) {
+    if (month == 1 || month == 2) {
+        year--;
+        month += 12;
+    }
+
+    int week = (year + year / 4 - year / 100 + year / 400 +
+        (13 * month + 8) / 5 + day) % 7;
+    return week;
 }
