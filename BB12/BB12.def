@@ -1,0 +1,6 @@
+LIBRARY BollingerBands12
+
+EXPORTS Init
+	Calculate
+	ReplaceStr
+	IntrfProcsRec

@@ -1,0 +1,8 @@
+LIBRARY EntryLine
+
+EXPORTS Init
+	Done
+	Calculate
+	ReplaceStr
+	IntrfProcsRec
+	OnParamsChange
