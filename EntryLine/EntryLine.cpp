@@ -57,7 +57,8 @@ int drawType;
 bool isOutputCsv = false;
 enum DrawType {
     VerticalLine = 0,
-    HorizontalLine = 1
+    HorizontalLine = 1,
+    Circle = 2
 };
 
 vector<Trade> trades;
@@ -100,6 +101,7 @@ EXPORT void __stdcall Init()
     RegOption("Entry DrawType", ot_EnumType, &drawType);
     AddOptionValue("Entry DrawType", "Vertical Line");
     AddOptionValue("Entry DrawType", "Horizontal Line");
+    AddOptionValue("Entry DrawType", "Circle");
     drawType = DrawType::VerticalLine;
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
@@ -138,72 +140,88 @@ EXPORT void __stdcall Calculate(int index)
         int objNameIndex = 1;
         string prefix = "VLine";
         for (Trade trade : trades) {
-            // Vertical Line
-            /*double se = datestring_to_double(trade.openTime);
-            string objName = create_objname(prefix, objNameIndex);
-            objNames.push_back(objName);
-            char* s = const_cast<char*>(objName.c_str());
-            ObjectCreate(s, obj_VLine, 0, se, 0);
-            Print("EntryLine: objectname char: " + string(s));
-            Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
-            if (trade.maxEquity >= minAvarageAbs) {
-                ObjectSet(s, OBJPROP_COLOR, profitLineColor);
-            }
-            else {
-                ObjectSet(s, OBJPROP_COLOR, lossLineColor);
-            }*/
-
-            // Horizontal Line
-            double se = datestring_to_double(trade.openTime);
-            string objName = create_objname("EntryHline", objNameIndex);
-            char* s = const_cast<char*>(objName.c_str());
-            // 5ŽžŠÔ•ª‚Ì’·‚³
-            double lineLength = se + ((5.0 * 3600) / 86400);
-            Print("EntryLine: tline lengh -> from: " + to_string(se) + " / to: " + to_string(lineLength));
-            ObjectCreate(s, obj_TrendLine, 0, se, trade.openPrice, lineLength, trade.openPrice);
-            if (trade.type == EntryType::Buy) {
-                ObjectSet(s, OBJPROP_COLOR, profitLineColor);
-            }
-            else if (trade.type == EntryType::Sell) {
-                ObjectSet(s, OBJPROP_COLOR, lossLineColor);
-            }
-            ObjectSet(s, OBJPROP_STYLE, TPenStyle::psDash);
-            objNames.push_back(objName);
-
-            string slObjName = create_objname("SLHline", objNameIndex);
-            char* s2 = const_cast<char*>(slObjName.c_str());
-            ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
-            ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
-            ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
-            objNames.push_back(slObjName);
-
-            string tpObjName = create_objname("TPHline", objNameIndex);
-            char* s3 = const_cast<char*>(tpObjName.c_str());
-            double diff = abs(trade.openPrice - trade.sl);
-            double tpPrice = 0.0;
-            if (trade.type == EntryType::Buy) {
-                tpPrice = trade.openPrice + diff;
-            }
-            else if (trade.type == EntryType::Sell) {
-                tpPrice = trade.openPrice - diff;
-            }
-
-            if (tpPrice > 0) {
-                ObjectCreate(s3, obj_TrendLine, 0, se, tpPrice, lineLength, tpPrice);
-                ObjectSet(s3, OBJPROP_COLOR, 0x00AA00);
-                ObjectSet(s3, OBJPROP_STYLE, TPenStyle::psDashDotDot);
-                objNames.push_back(tpObjName);
-            }
-
-            /*string objName;
             if (drawType == DrawType::VerticalLine) {
-                objName = create_vline(objNameIndex, trade);
+                // Vertical Line
+                double se = datestring_to_double(trade.openTime);
+                string objName = create_objname(prefix, objNameIndex);
+                objNames.push_back(objName);
+                char* s = const_cast<char*>(objName.c_str());
+                ObjectCreate(s, obj_VLine, 0, se, 0);
+                Print("EntryLine: objectname char: " + string(s));
+                Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
+                if (trade.maxEquity >= minAvarageAbs) {
+                    ObjectSet(s, OBJPROP_COLOR, profitLineColor);
+                }
+                else {
+                    ObjectSet(s, OBJPROP_COLOR, lossLineColor);
+                }
             }
             else if (drawType == DrawType::HorizontalLine) {
-                objName = create_hline(objNameIndex, trade);
-            }*/
+                // Horizontal Line
+                double se = datestring_to_double(trade.openTime);
+                string objName = create_objname("EntryHline", objNameIndex);
+                char* s = const_cast<char*>(objName.c_str());
+                // 5ŽžŠÔ•ª‚Ì’·‚³
+                double lineLength = se + ((5.0 * 3600) / 86400);
+                Print("EntryLine: tline lengh -> from: " + to_string(se) + " / to: " + to_string(lineLength));
+                ObjectCreate(s, obj_TrendLine, 0, se, trade.openPrice, lineLength, trade.openPrice);
+                if (trade.type == EntryType::Buy) {
+                    ObjectSet(s, OBJPROP_COLOR, profitLineColor);
+                }
+                else if (trade.type == EntryType::Sell) {
+                    ObjectSet(s, OBJPROP_COLOR, lossLineColor);
+                }
+                ObjectSet(s, OBJPROP_STYLE, TPenStyle::psDash);
+                objNames.push_back(objName);
+                Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
 
-            Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
+                string slObjName = create_objname("SLHline", objNameIndex);
+                char* s2 = const_cast<char*>(slObjName.c_str());
+                ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
+                ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
+                ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                objNames.push_back(slObjName);
+                Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
+
+                string tpObjName = create_objname("TPHline", objNameIndex);
+                char* s3 = const_cast<char*>(tpObjName.c_str());
+                double diff = abs(trade.openPrice - trade.sl);
+                double tpPrice = 0.0;
+                if (trade.type == EntryType::Buy) {
+                    tpPrice = trade.openPrice + diff;
+                }
+                else if (trade.type == EntryType::Sell) {
+                    tpPrice = trade.openPrice - diff;
+                }
+
+                if (tpPrice > 0) {
+                    ObjectCreate(s3, obj_TrendLine, 0, se, tpPrice, lineLength, tpPrice);
+                    ObjectSet(s3, OBJPROP_COLOR, 0x00AA00);
+                    ObjectSet(s3, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                    objNames.push_back(tpObjName);
+                    Print("EntryLine: create object -> " + tpObjName + " / size: " + to_string(tpObjName.size()));
+                }
+            }
+            else if (drawType == DrawType::Circle) {
+                // Horizontal Line
+                setlocale(LC_CTYPE, "ja_JP.UTF-8");
+                double se = datestring_to_double(trade.openTime);
+                string objName = create_objname("EntryCircle", objNameIndex);
+                char* s = const_cast<char*>(objName.c_str());
+                ObjectCreate(s, obj_Text, 0, se, trade.openPrice, 0, 0);
+                ObjectSetText(s, "›", 28, "Meiryo UI", clYellow);
+                /*if (trade.type == EntryType::Buy) {
+                    ObjectSet(s, OBJPROP_COLOR, profitLineColor);
+                }
+                else if (trade.type == EntryType::Sell) {
+                    ObjectSet(s, OBJPROP_COLOR, lossLineColor);
+                }*/
+                objNames.push_back(objName);
+                Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
+            }
+
+
+            
             objNameIndex++;
         }
 
