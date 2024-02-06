@@ -67,6 +67,7 @@ bool showTakeProfitLine = false;
 double labelValignmentPrice = 0.0;
 int circleColor = clYellow;
 int slColor = clRed;
+int timeDifference = 0;
 
 vector<Trade> trades;
 double minAvarageAbs;
@@ -126,6 +127,8 @@ EXPORT void __stdcall Init()
     RegOption("Label Valignment Price", ot_Double, &labelValignmentPrice);
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
+
+    RegOption("Time Difference", ot_Integer, &timeDifference);
 
     objNames = {};
 }
@@ -230,6 +233,11 @@ EXPORT void __stdcall Calculate(int index)
             else if (drawType == DrawType::Circle) {
                 // Horizontal Line
                 double se = datestring_to_double(trade.openTime);
+                if (timeDifference > 0) {
+                    double td = (double)timeDifference;
+                    double add = td * 3600.0 / 86400.0;
+                    se += add;
+                }
                 string objName = create_objname("EntryCircle", objNameIndex);
                 char* s = const_cast<char*>(objName.c_str());
                 ObjectCreate(s, obj_Text, 0, se, trade.openPrice, 0, 0);
