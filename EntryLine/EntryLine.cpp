@@ -66,6 +66,7 @@ bool showStopLossLine = true;
 bool showTakeProfitLine = false;
 double labelValignmentPrice = 0.0;
 int circleColor = clYellow;
+int slColor = clRed;
 
 vector<Trade> trades;
 double minAvarageAbs;
@@ -112,6 +113,7 @@ EXPORT void __stdcall Init()
 
     RegOption("Show TP Line", ot_Boolean, &showTakeProfitLine);
     RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
+    RegOption("SL Color", ot_Color, &slColor);
 
     RegOption("Circle Color", ot_Color, &circleColor);
 
@@ -198,7 +200,7 @@ EXPORT void __stdcall Calculate(int index)
                     string slObjName = create_objname("SLHline", objNameIndex);
                     char* s2 = const_cast<char*>(slObjName.c_str());
                     ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
-                    ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
+                    ObjectSet(s2, OBJPROP_COLOR, slColor);
                     ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
                     objNames.push_back(slObjName);
                     Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
@@ -267,7 +269,7 @@ EXPORT void __stdcall Calculate(int index)
                     // 5ŽžŠÔ•ª‚Ì’·‚³
                     double lineLength = se + ((5.0 * 3600) / 86400);
                     ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
-                    ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
+                    ObjectSet(s2, OBJPROP_COLOR, slColor);
                     ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
                     objNames.push_back(slObjName);
                     Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
