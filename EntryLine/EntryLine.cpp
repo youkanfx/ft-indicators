@@ -50,6 +50,8 @@ struct Trade {
 };
 
 PChar filePath = NULL;
+PChar comment = NULL;
+PChar objNamePrefix = NULL;
 int profitLineColor = 0xFF0000;
 int lossLineColor = 0x0000FF;
 bool isObjectCreated = false;
@@ -60,8 +62,10 @@ enum DrawType {
     HorizontalLine = 1,
     Circle = 2
 };
-bool showStopLossLine = false;
+bool showStopLossLine = true;
 bool showTakeProfitLine = false;
+double labelValignmentPrice = 0.0;
+int circleColor = clYellow;
 
 vector<Trade> trades;
 double minAvarageAbs;
@@ -108,6 +112,16 @@ EXPORT void __stdcall Init()
 
     RegOption("Show TP Line", ot_Boolean, &showTakeProfitLine);
     RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
+
+    RegOption("Circle Color", ot_Color, &circleColor);
+
+    RegOption("Comment", ot_PChar, &comment);
+    ReplaceStr(comment, "");
+
+    RegOption("ObjectName Prefix", ot_PChar, &objNamePrefix);
+    ReplaceStr(objNamePrefix, "");
+
+    RegOption("Label Valignment Price", ot_Double, &labelValignmentPrice);
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
 
@@ -213,14 +227,51 @@ EXPORT void __stdcall Calculate(int index)
             }
             else if (drawType == DrawType::Circle) {
                 // Horizontal Line
-                setlocale(LC_CTYPE, "ja_JP.UTF-8");
                 double se = datestring_to_double(trade.openTime);
                 string objName = create_objname("EntryCircle", objNameIndex);
                 char* s = const_cast<char*>(objName.c_str());
                 ObjectCreate(s, obj_Text, 0, se, trade.openPrice, 0, 0);
-                ObjectSetText(s, "›", 28, "Meiryo UI", clYellow);
+                char c[] = { 0xe2, 0x97, 0x8b, 0x00 };
+                ObjectSetText(s, c, 12, "Meiryo UI", circleColor);
                 objNames.push_back(objName);
                 Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
+
+                string labelObjName = create_objname("EntryCircleLabel", objNameIndex);
+                char* s3 = const_cast<char*>(labelObjName.c_str());
+                double labelX = se + ((15.0 * 60.0) / 86400.0);
+                double labelY = trade.openPrice + labelValignmentPrice;
+                ObjectCreate(s3, obj_Text, 0, labelX, labelY, 0, 0);
+                char* labelText = trade.type == EntryType::Buy ? " buy" : " sell";
+                if (strlen(comment) > 0) {
+                    int size = strlen(labelText) + strlen(comment) + 1;
+                    char t[100] = {};
+                    if (size > 100) {
+                        ObjectSetText(s3, labelText, 9, "Meiryo UI", circleColor);
+                    }
+                    else {
+                        strcat_s(t, size, labelText);
+                        strcat_s(t, size, comment);
+                        ObjectSetText(s3, t, 8, "Meiryo UI", circleColor);
+                    }
+                }
+                else {
+                    ObjectSetText(s3, labelText, 9, "Meiryo UI", clYellow);
+                }
+                ObjectSet(s3, OBJPROP_TEXT, 10.0);
+                ObjectSet(s3, OBJPROP_HALIGNMENT, taLeftJustify);
+                objNames.push_back(labelObjName);
+
+                if (showStopLossLine) {
+                    string slObjName = create_objname("SLHline", objNameIndex);
+                    char* s2 = const_cast<char*>(slObjName.c_str());
+                    // 5ŽžŠÔ•ª‚Ì’·‚³
+                    double lineLength = se + ((5.0 * 3600) / 86400);
+                    ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
+                    ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
+                    ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                    objNames.push_back(slObjName);
+                    Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
+                }
             }
             objNameIndex++;
 
@@ -294,11 +345,11 @@ double datestring_to_double(string str) {
 
     double se = sm + sd;
 
-    if (is_summertime(str)) {
+    /*if (is_summertime(str)) {
         double ajust = 1.0 * 3600.0 / 86400.0;
         se -= ajust;
         Print("EntryLine: Today is SummerTime: " + to_string(se));
-    }
+    }*/
 
     return se;
 }
@@ -389,6 +440,11 @@ bool load_csv(char* path) {
 }
 
 string create_objname(string prefix, int index) {
+    string prefixParam = string(objNamePrefix);
+    if (!prefixParam.empty()) {
+        prefix = prefixParam + prefix;
+    }
+
     string objIndex = to_string(index);
     objIndex = string(max(0, 5 - objIndex.size()), '0') + objIndex;
     string objName = prefix + objIndex;
