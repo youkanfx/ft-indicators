@@ -37,15 +37,15 @@ enum EntryType {
 
 struct Trade {
     string symbol;
-    EntryType type;
+    EntryType type = EntryType::None;
     string openTime;
-    double openPrice;
-    double sl;
-    double tp;
+    double openPrice = 0.0;
+    double sl = 0.0;
+    double tp = 0.0;
     string closeTime;
-    double closePrice;
-    double maxEquity;
-    double minEquity;
+    double closePrice = 0.0;
+    double maxEquity = 0.0;
+    double minEquity = 0.0;
     string objName;
 };
 
@@ -60,6 +60,8 @@ enum DrawType {
     HorizontalLine = 1,
     Circle = 2
 };
+bool showStopLossLine = false;
+bool showTakeProfitLine = false;
 
 vector<Trade> trades;
 double minAvarageAbs;
@@ -103,6 +105,9 @@ EXPORT void __stdcall Init()
     AddOptionValue("Entry DrawType", "Horizontal Line");
     AddOptionValue("Entry DrawType", "Circle");
     drawType = DrawType::VerticalLine;
+
+    RegOption("Show TP Line", ot_Boolean, &showTakeProfitLine);
+    RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
 
@@ -175,31 +180,35 @@ EXPORT void __stdcall Calculate(int index)
                 objNames.push_back(objName);
                 Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
 
-                string slObjName = create_objname("SLHline", objNameIndex);
-                char* s2 = const_cast<char*>(slObjName.c_str());
-                ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
-                ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
-                ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
-                objNames.push_back(slObjName);
-                Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
-
-                string tpObjName = create_objname("TPHline", objNameIndex);
-                char* s3 = const_cast<char*>(tpObjName.c_str());
-                double diff = abs(trade.openPrice - trade.sl);
-                double tpPrice = 0.0;
-                if (trade.type == EntryType::Buy) {
-                    tpPrice = trade.openPrice + diff;
-                }
-                else if (trade.type == EntryType::Sell) {
-                    tpPrice = trade.openPrice - diff;
+                if (showStopLossLine) {
+                    string slObjName = create_objname("SLHline", objNameIndex);
+                    char* s2 = const_cast<char*>(slObjName.c_str());
+                    ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
+                    ObjectSet(s2, OBJPROP_COLOR, 0x0000AA);
+                    ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                    objNames.push_back(slObjName);
+                    Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
                 }
 
-                if (tpPrice > 0) {
-                    ObjectCreate(s3, obj_TrendLine, 0, se, tpPrice, lineLength, tpPrice);
-                    ObjectSet(s3, OBJPROP_COLOR, 0x00AA00);
-                    ObjectSet(s3, OBJPROP_STYLE, TPenStyle::psDashDotDot);
-                    objNames.push_back(tpObjName);
-                    Print("EntryLine: create object -> " + tpObjName + " / size: " + to_string(tpObjName.size()));
+                if (showTakeProfitLine) {
+                    string tpObjName = create_objname("TPHline", objNameIndex);
+                    char* s3 = const_cast<char*>(tpObjName.c_str());
+                    double diff = abs(trade.openPrice - trade.sl);
+                    double tpPrice = 0.0;
+                    if (trade.type == EntryType::Buy) {
+                        tpPrice = trade.openPrice + diff;
+                    }
+                    else if (trade.type == EntryType::Sell) {
+                        tpPrice = trade.openPrice - diff;
+                    }
+
+                    if (tpPrice > 0) {
+                        ObjectCreate(s3, obj_TrendLine, 0, se, tpPrice, lineLength, tpPrice);
+                        ObjectSet(s3, OBJPROP_COLOR, 0x00AA00);
+                        ObjectSet(s3, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                        objNames.push_back(tpObjName);
+                        Print("EntryLine: create object -> " + tpObjName + " / size: " + to_string(tpObjName.size()));
+                    }
                 }
             }
             else if (drawType == DrawType::Circle) {
@@ -210,22 +219,13 @@ EXPORT void __stdcall Calculate(int index)
                 char* s = const_cast<char*>(objName.c_str());
                 ObjectCreate(s, obj_Text, 0, se, trade.openPrice, 0, 0);
                 ObjectSetText(s, "›", 28, "Meiryo UI", clYellow);
-                /*if (trade.type == EntryType::Buy) {
-                    ObjectSet(s, OBJPROP_COLOR, profitLineColor);
-                }
-                else if (trade.type == EntryType::Sell) {
-                    ObjectSet(s, OBJPROP_COLOR, lossLineColor);
-                }*/
                 objNames.push_back(objName);
                 Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
             }
-
-
-            
             objNameIndex++;
-        }
 
-        isObjectCreated = true;
+            isObjectCreated = true;
+        }
     }
 }
 
@@ -295,7 +295,7 @@ double datestring_to_double(string str) {
     double se = sm + sd;
 
     if (is_summertime(str)) {
-        double ajust = 1 * 3600 / 86400;
+        double ajust = 1.0 * 3600.0 / 86400.0;
         se -= ajust;
         Print("EntryLine: Today is SummerTime: " + to_string(se));
     }
