@@ -68,6 +68,13 @@ double labelValignmentPrice = 0.0;
 int circleColor = clYellow;
 int slColor = clRed;
 int timeDifference = 0;
+int labelFontSize;
+
+enum SlDirection {
+    RightToLeft = 0,
+    LeftToRight = 1
+};
+int slDirection = SlDirection::RightToLeft;
 
 vector<Trade> trades;
 double minAvarageAbs;
@@ -116,6 +123,11 @@ EXPORT void __stdcall Init()
     RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
     RegOption("SL Color", ot_Color, &slColor);
 
+    RegOption("SL Direction", ot_EnumType, &slDirection);
+    AddOptionValue("SL Direction", "Right To Left");
+    AddOptionValue("SL Direction", "Left To Right");
+
+
     RegOption("Circle Color", ot_Color, &circleColor);
 
     RegOption("Comment", ot_PChar, &comment);
@@ -125,6 +137,8 @@ EXPORT void __stdcall Init()
     ReplaceStr(objNamePrefix, "");
 
     RegOption("Label Valignment Price", ot_Double, &labelValignmentPrice);
+    RegOption("Label FontSize", ot_Integer, &labelFontSize);
+    labelFontSize = 9;
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
 
@@ -256,26 +270,31 @@ EXPORT void __stdcall Calculate(int index)
                     int size = strlen(labelText) + strlen(comment) + 1;
                     char t[100] = {};
                     if (size > 100) {
-                        ObjectSetText(s3, labelText, 9, "Meiryo UI", circleColor);
+                        ObjectSetText(s3, labelText, labelFontSize, "Meiryo UI", circleColor);
                     }
                     else {
                         strcat_s(t, size, labelText);
                         strcat_s(t, size, comment);
-                        ObjectSetText(s3, t, 8, "Meiryo UI", circleColor);
+                        ObjectSetText(s3, t, labelFontSize, "Meiryo UI", circleColor);
                     }
                 }
                 else {
-                    ObjectSetText(s3, labelText, 9, "Meiryo UI", clYellow);
+                    ObjectSetText(s3, labelText, labelFontSize, "Meiryo UI", clYellow);
                 }
-                ObjectSet(s3, OBJPROP_TEXT, 10.0);
                 ObjectSet(s3, OBJPROP_HALIGNMENT, taLeftJustify);
                 objNames.push_back(labelObjName);
 
                 if (showStopLossLine) {
                     string slObjName = create_objname("SLHline", objNameIndex);
                     char* s2 = const_cast<char*>(slObjName.c_str());
-                    // 5ŽžŠÔ•ª‚Ì’·‚³
-                    double lineLength = se + ((5.0 * 3600) / 86400);
+                    double lineLength = 0.0;
+                    if (slDirection == SlDirection::RightToLeft) {
+                        // 5ŽžŠÔ•ª‚Ì’·‚³
+                        lineLength = se - ((5.0 * 3600) / 86400);
+                    }
+                    else if (slDirection == SlDirection::LeftToRight) {
+                        lineLength = se + ((5.0 * 3600) / 86400);
+                    }
                     ObjectCreate(s2, obj_TrendLine, 0, se, trade.sl, lineLength, trade.sl);
                     ObjectSet(s2, OBJPROP_COLOR, slColor);
                     ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
