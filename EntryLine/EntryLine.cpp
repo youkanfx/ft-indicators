@@ -109,6 +109,14 @@ EXPORT void __stdcall Init()
 	RegOption("File Path", ot_PChar, &filePath);
     ReplaceStr(filePath, "C:\\Users\\User\\Desktop\\data.csv");
 
+    RegOption("Circle Color", ot_Color, &circleColor);
+
+    RegOption("Comment", ot_PChar, &comment);
+    ReplaceStr(comment, "");
+
+    RegOption("ObjectName Prefix", ot_PChar, &objNamePrefix);
+    ReplaceStr(objNamePrefix, "");
+
     RegOption("Profit Line Color", ot_Color, &profitLineColor);
 
     RegOption("Loss Line Color", ot_Color, &lossLineColor);
@@ -117,7 +125,7 @@ EXPORT void __stdcall Init()
     AddOptionValue("Entry DrawType", "Vertical Line");
     AddOptionValue("Entry DrawType", "Horizontal Line");
     AddOptionValue("Entry DrawType", "Circle");
-    drawType = DrawType::VerticalLine;
+    drawType = DrawType::Circle;
 
     RegOption("Show TP Line", ot_Boolean, &showTakeProfitLine);
     RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
@@ -127,18 +135,9 @@ EXPORT void __stdcall Init()
     AddOptionValue("SL Direction", "Right To Left");
     AddOptionValue("SL Direction", "Left To Right");
 
-
-    RegOption("Circle Color", ot_Color, &circleColor);
-
-    RegOption("Comment", ot_PChar, &comment);
-    ReplaceStr(comment, "");
-
-    RegOption("ObjectName Prefix", ot_PChar, &objNamePrefix);
-    ReplaceStr(objNamePrefix, "");
-
     RegOption("Label Valignment Price", ot_Double, &labelValignmentPrice);
     RegOption("Label FontSize", ot_Integer, &labelFontSize);
-    labelFontSize = 9;
+    labelFontSize = 10;
 
     RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
 
