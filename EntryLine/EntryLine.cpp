@@ -63,9 +63,10 @@ enum DrawType {
     Circle = 2
 };
 bool showStopLossLine = true;
-bool showTakeProfitLine = false;
+bool showTakeProfitLine = true;
 double labelValignmentPrice = 0.0;
 int circleColor = clYellow;
+int tpColor = clLime;
 int slColor = clRed;
 int timeDifference = 0;
 int labelFontSize;
@@ -109,39 +110,37 @@ EXPORT void __stdcall Init()
 	RegOption("File Path", ot_PChar, &filePath);
     ReplaceStr(filePath, "C:\\Users\\User\\Desktop\\data.csv");
 
-    RegOption("Circle Color", ot_Color, &circleColor);
-
-    RegOption("Comment", ot_PChar, &comment);
-    ReplaceStr(comment, "");
-
-    RegOption("ObjectName Prefix", ot_PChar, &objNamePrefix);
-    ReplaceStr(objNamePrefix, "");
-
-    RegOption("Profit Line Color", ot_Color, &profitLineColor);
-
-    RegOption("Loss Line Color", ot_Color, &lossLineColor);
-
-    RegOption("Entry DrawType", ot_EnumType, &drawType);
-    AddOptionValue("Entry DrawType", "Vertical Line");
-    AddOptionValue("Entry DrawType", "Horizontal Line");
-    AddOptionValue("Entry DrawType", "Circle");
+    //RegOption("Entry DrawType", ot_EnumType, &drawType);
+    // AddOptionValue("Entry DrawType", "Vertical Line");
+    // AddOptionValue("Entry DrawType", "Horizontal Line");
+    //AddOptionValue("Entry DrawType", "Circle");
     drawType = DrawType::Circle;
 
+    AddSeparator("Entry");
+    RegOption("Circle Color", ot_Color, &circleColor);
     RegOption("Show TP Line", ot_Boolean, &showTakeProfitLine);
+    RegOption("TP Color", ot_Color, &tpColor);
     RegOption("Show SL Line", ot_Boolean, &showStopLossLine);
     RegOption("SL Color", ot_Color, &slColor);
 
-    RegOption("SL Direction", ot_EnumType, &slDirection);
-    AddOptionValue("SL Direction", "Right To Left");
-    AddOptionValue("SL Direction", "Left To Right");
-
-    RegOption("Label Valignment Price", ot_Double, &labelValignmentPrice);
+    AddSeparator("Label");
+    RegOption("Label Vertical Alignment Price", ot_Double, &labelValignmentPrice);
     RegOption("Label FontSize", ot_Integer, &labelFontSize);
     labelFontSize = 10;
 
-    RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);
-
+    AddSeparator("Option");
+    RegOption("Comment", ot_PChar, &comment);
+    ReplaceStr(comment, "");
+    RegOption("ObjectName Prefix", ot_PChar, &objNamePrefix);
+    ReplaceStr(objNamePrefix, "");
     RegOption("Time Difference", ot_Integer, &timeDifference);
+
+    /*RegOption("Profit Line Color", ot_Color, &profitLineColor);
+    RegOption("Loss Line Color", ot_Color, &lossLineColor);
+    RegOption("SL Direction", ot_EnumType, &slDirection);
+    AddOptionValue("SL Direction", "Right To Left");
+    AddOptionValue("SL Direction", "Left To Right");
+    RegOption("Output CsvFile", ot_Boolean, &isOutputCsv);*/
 
     objNames = {};
 }
@@ -225,7 +224,7 @@ EXPORT void __stdcall Calculate(int index)
                 if (showTakeProfitLine) {
                     string tpObjName = create_objname("TPHline", objNameIndex);
                     char* s3 = const_cast<char*>(tpObjName.c_str());
-                    double diff = abs(trade.openPrice - trade.sl);
+                    double diff = abs(trade.openPrice - trade.tp);
                     double tpPrice = 0.0;
                     if (trade.type == EntryType::Buy) {
                         tpPrice = trade.openPrice + diff;
@@ -256,6 +255,8 @@ EXPORT void __stdcall Calculate(int index)
                 ObjectCreate(s, obj_Text, 0, se, trade.openPrice, 0, 0);
                 char c[] = { 0xe2, 0x97, 0x8b, 0x00 };
                 ObjectSetText(s, c, 12, "Meiryo UI", circleColor);
+                ObjectSet(s, OBJPROP_VALIGNMENT, tlCenter);
+                ObjectSet(s, OBJPROP_HALIGNMENT, taCenter);
                 objNames.push_back(objName);
                 Print("EntryLine: create object -> " + objName + " / size: " + to_string(objName.size()));
 
@@ -280,6 +281,7 @@ EXPORT void __stdcall Calculate(int index)
                 else {
                     ObjectSetText(s3, labelText, labelFontSize, "Meiryo UI", clYellow);
                 }
+                ObjectSet(s3, OBJPROP_VALIGNMENT, tlCenter);
                 ObjectSet(s3, OBJPROP_HALIGNMENT, taLeftJustify);
                 objNames.push_back(labelObjName);
 
@@ -299,6 +301,24 @@ EXPORT void __stdcall Calculate(int index)
                     ObjectSet(s2, OBJPROP_STYLE, TPenStyle::psDashDotDot);
                     objNames.push_back(slObjName);
                     Print("EntryLine: create object -> " + slObjName + " / size: " + to_string(slObjName.size()));
+                }
+
+                if (showTakeProfitLine) {
+                    string tpObjName = create_objname("TPHline", objNameIndex);
+                    char* s3 = const_cast<char*>(tpObjName.c_str());
+                    double lineLength = 0.0;
+                    if (slDirection == SlDirection::RightToLeft) {
+                        // 5ŽžŠÔ•ª‚Ì’·‚³
+                        lineLength = se - ((5.0 * 3600) / 86400);
+                    }
+                    else if (slDirection == SlDirection::LeftToRight) {
+                        lineLength = se + ((5.0 * 3600) / 86400);
+                    }
+                    ObjectCreate(s3, obj_TrendLine, 0, se, trade.tp, lineLength, trade.tp);
+                    ObjectSet(s3, OBJPROP_COLOR, tpColor);
+                    ObjectSet(s3, OBJPROP_STYLE, TPenStyle::psDashDotDot);
+                    objNames.push_back(tpObjName);
+                    Print("EntryLine: create object -> " + tpObjName + " / size: " + to_string(tpObjName.size()));
                 }
             }
             objNameIndex++;
