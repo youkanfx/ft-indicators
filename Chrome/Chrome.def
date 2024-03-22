@@ -1,0 +1,8 @@
+LIBRARY Chrome
+
+EXPORTS InitStrategy
+	DoneStrategy
+	ResetStrategy
+	GetSingleTick
+	ReplaceStr
+	IntrfProcsRec
