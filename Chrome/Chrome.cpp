@@ -4,6 +4,7 @@
 #include "StrategyInterfaceUnit.h"
 #include "TechnicalFunctions.h"
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -77,27 +78,25 @@ BBPrices BollingerBands::GetPrices(int index)
 #pragma endregion
 #pragma region Cafeaulait
 enum CafeaulaitState {
-	StandBy,
 	Exploded,
 	MiddleTouch,
-	CanEntry,
-	Closed
+	Entried,
 };
 
 class Cafeaulait {
 private:
-	int _orderHandle;
+	double _rootPrice;
 	CafeaulaitState _state;
 public:
-	Cafeaulait(int orderHandle);
+	Cafeaulait(double rootPrice);
 	void ModifyState(CafeaulaitState state);
 	CafeaulaitState GetState();
-	int GetOrderHandle();
+	double GetRootPrice();
 };
-Cafeaulait::Cafeaulait(int orderHandle)
+Cafeaulait::Cafeaulait(double rootPrice)
 {
-	_orderHandle = orderHandle;
-	_state = StandBy;
+	_rootPrice = rootPrice;
+	_state = Exploded;
 }
 
 void Cafeaulait::ModifyState(CafeaulaitState state)
@@ -110,9 +109,8 @@ CafeaulaitState Cafeaulait::GetState()
 	return _state;
 }
 
-int Cafeaulait::GetOrderHandle()
-{
-	return _orderHandle;
+double Cafeaulait::GetRootPrice() {
+	return _rootPrice;
 }
 #pragma endregion
 #pragma region Stf
@@ -191,6 +189,8 @@ BollingerBands *bb15m;
 Stf* stfD1;
 Stf* stfH4;
 Stf* stfH1;
+vector<Cafeaulait*> upCafes;
+vector<Cafeaulait*> lowCafes;
 
 bool StfD1Filter;
 bool StfH4Filter;
@@ -243,10 +243,10 @@ EXPORT void __stdcall GetSingleTick()
 
   // 15Mカフェオレ
   if (OpenTime == NULL) {
-	  OpenTime = Time(0);
+	  OpenTime = iTime(Symbol(), PERIOD_M15, 0);
   }
-  if (OpenTime != Time(0)) {
-	  OpenTime = Time(0);
+  if (OpenTime != iTime(Symbol(), PERIOD_M15, 0)) {
+	  OpenTime = iTime(Symbol(), PERIOD_M15, 0);
 	  BBPrices bb = bb15m->GetPrices(1);
 	  if (CanLongEntry()) {
 		// 上カフェオレ
@@ -261,52 +261,49 @@ EXPORT void __stdcall GetSingleTick()
 }
 
 void UpperCafeaulait(BBPrices bbPrices) {
-	if (IsLongEntried && OrderClosed(LongOrderHandle)) {
-		IsLongEntried = false;
-	}
-	if (IsLongEntried) {
-		return;
-	}
-
-	if (!IsUpperExplosion) {
-		if (iHigh(Symbol(), PERIOD_M15, 1) >= bbPrices.upper2) {
-			// 根本探索
-			bool existsRoot = false;
-			for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
-				BBPrices uBb = bb15m->GetPrices(i);
-				if (iClose(Symbol(), PERIOD_M15, i) < uBb.lower1) {
-					UpperExplosionRoot = iLow(Symbol(), PERIOD_M15, i);
-					existsRoot = true;
-					break;
-				}
-			}
-
-			if (!existsRoot) {
-				return;
-			}
-
-			IsUpperExplosion = true;
-		}
-	}
-	else {
-		if (!IsUpperMiddleTouch) {
-			if (bbPrices.middle >= iLow(Symbol(), PERIOD_M15, 1)) {
-				IsUpperMiddleTouch = true;
+	if (iHigh(Symbol(), PERIOD_M15, 1) >= bbPrices.upper2) {
+		// 根本探索
+		bool existsRoot = false;
+		double root;
+		for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
+			BBPrices uBb = bb15m->GetPrices(i);
+			if (iClose(Symbol(), PERIOD_M15, i) < uBb.lower1) {
+				root = iLow(Symbol(), PERIOD_M15, i);
+				existsRoot = true;
+				break;
 			}
 		}
-		else {
-			if (iClose(Symbol(), PERIOD_M15, 1) > iOpen(Symbol(), PERIOD_M15, 1)) {
+
+		if (!existsRoot) {
+			return;
+		}
+
+		Cafeaulait* cafe = new Cafeaulait(root);
+		upCafes.push_back(cafe);
+	}
+
+	if (bbPrices.middle >= iLow(Symbol(), PERIOD_M15, 1)) {
+		for (Cafeaulait* c : upCafes) {
+			if (c->GetState() == Exploded) {
+				c->ModifyState(MiddleTouch);
+			}
+		}
+	}
+
+	if (iClose(Symbol(), PERIOD_M15, 1) > iOpen(Symbol(), PERIOD_M15, 1)) {
+		for (Cafeaulait* c : upCafes) {
+			if (c->GetState() == MiddleTouch) {
 				// エントリー
-				double diff = Ask() - UpperExplosionRoot;
+				double root = c->GetRootPrice();
+				double diff = Ask() - root;
 				double tp = Ask() + diff;
-				if (SendInstantOrder(Symbol(), op_Buy, 0.01, UpperExplosionRoot, tp, "", 0, LongOrderHandle)) {
-					IsLongEntried = true;
-					IsUpperExplosion = false;
-					IsUpperMiddleTouch = false;
-					UpperExplosionRoot = 0;
+				int oh;
+				if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
+					Print("long entry error!!");
 				}
 				else {
-					Print("long entry error!!");
+					auto end = remove(upCafes.begin(), upCafes.end(), c);
+					upCafes.erase(end, upCafes.end());
 				}
 			}
 		}
@@ -314,51 +311,49 @@ void UpperCafeaulait(BBPrices bbPrices) {
 }
 
 void LowerCafeaulait(BBPrices bbPrices) {
-	if (IsShortEntried && OrderClosed(ShortOrderHandle)) {
-		IsShortEntried = false;
-	}
-	if (IsShortEntried) {
-		return;
-	}
-
-	if (!IsLowerExplosion) {
-		if (iLow(Symbol(), PERIOD_M15, 1) <= bbPrices.lower2) {
-			// 根本探索
-			bool existsRoot = false;
-			for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
-				BBPrices uBb = bb15m->GetPrices(i);
-				if (iClose(Symbol(), PERIOD_M15, i) > uBb.upper1) {
-					LowerExplosionRoot = iHigh(Symbol(), PERIOD_M15, i);
-					existsRoot = true;
-					break;
-				}
-			}
-
-			if (!existsRoot) {
-				return;
-			}
-			IsLowerExplosion = true;
-		}
-	}
-	else {
-		if (!IsLowerMiddleTouch) {
-			if (bbPrices.middle <= iHigh(Symbol(), PERIOD_M15, 1)) {
-				IsLowerMiddleTouch = true;
+	if (iLow(Symbol(), PERIOD_M15, 1) <= bbPrices.lower2) {
+		// 根本探索
+		bool existsRoot = false;
+		double root;
+		for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
+			BBPrices uBb = bb15m->GetPrices(i);
+			if (iClose(Symbol(), PERIOD_M15, i) > uBb.upper1) {
+				root = iHigh(Symbol(), PERIOD_M15, i);
+				existsRoot = true;
+				break;
 			}
 		}
-		else {
-			if (iClose(Symbol(), PERIOD_M15, 1) < iOpen(Symbol(), PERIOD_M15, 1)) {
+
+		if (!existsRoot) {
+			return;
+		}
+
+		Cafeaulait* cafe = new Cafeaulait(root);
+		lowCafes.push_back(cafe);
+	}
+
+	if (bbPrices.middle <= iHigh(Symbol(), PERIOD_M15, 1)) {
+		for (Cafeaulait* c : lowCafes) {
+			if (c->GetState() == Exploded) {
+				c->ModifyState(MiddleTouch);
+			}
+		}
+	}
+
+	if (iClose(Symbol(), PERIOD_M15, 1) < iOpen(Symbol(), PERIOD_M15, 1)) {
+		for (Cafeaulait* c : lowCafes) {
+			if (c->GetState() == MiddleTouch) {
 				// エントリー
-				double diff = LowerExplosionRoot - Bid();
+				double root = c->GetRootPrice();
+				double diff = root - Bid();
 				double tp = Bid() - diff;
-				if (SendInstantOrder(Symbol(), op_Sell, 0.01, LowerExplosionRoot, tp, "", 0, ShortOrderHandle)) {
-					IsShortEntried = true;
-					IsLowerExplosion = false;
-					IsLowerMiddleTouch = false;
-					LowerExplosionRoot = 0;
+				int oh;
+				if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
+					Print("short entry error!!");
 				}
 				else {
-					Print("short entry error!!");
+					auto end = remove(lowCafes.begin(), lowCafes.end(), c);
+					lowCafes.erase(end, lowCafes.end());
 				}
 			}
 		}
