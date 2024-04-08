@@ -199,7 +199,7 @@ int Timeframe;
 
 EXPORT void __stdcall InitStrategy()
 {
-  StrategyShortName("Chrome");
+  StrategyShortName("CafeAuLait");
   StrategyDescription("Cafe au lait");
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
@@ -214,7 +214,7 @@ EXPORT void __stdcall InitStrategy()
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
 
-  bb15m = new BollingerBands(Symbol(), PERIOD_M15);
+  bb15m = new BollingerBands(Symbol(), Timeframe);
   stfD1 = new Stf(Symbol(), PERIOD_D1);
   stfH4 = new Stf(Symbol(), PERIOD_H4);
   stfH1 = new Stf(Symbol(), PERIOD_H1);
@@ -243,10 +243,10 @@ EXPORT void __stdcall GetSingleTick()
 
   // 15Mカフェオレ
   if (OpenTime == NULL) {
-	  OpenTime = iTime(Symbol(), PERIOD_M15, 0);
+	  OpenTime = iTime(Symbol(), Timeframe, 0);
   }
-  if (OpenTime != iTime(Symbol(), PERIOD_M15, 0)) {
-	  OpenTime = iTime(Symbol(), PERIOD_M15, 0);
+  if (OpenTime != iTime(Symbol(), Timeframe, 0)) {
+	  OpenTime = iTime(Symbol(), Timeframe, 0);
 	  BBPrices bb = bb15m->GetPrices(1);
 	  if (CanLongEntry()) {
 		// 上カフェオレ
@@ -261,14 +261,14 @@ EXPORT void __stdcall GetSingleTick()
 }
 
 void UpperCafeaulait(BBPrices bbPrices) {
-	if (iHigh(Symbol(), PERIOD_M15, 1) >= bbPrices.upper2) {
+	if (iHigh(Symbol(), Timeframe, 1) >= bbPrices.upper2) {
 		// 根本探索
 		bool existsRoot = false;
 		double root;
-		for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
+		for (int i = 2; i < iBars(Symbol(), Timeframe); i++) {
 			BBPrices uBb = bb15m->GetPrices(i);
-			if (iClose(Symbol(), PERIOD_M15, i) < uBb.lower1) {
-				root = iLow(Symbol(), PERIOD_M15, i);
+			if (iClose(Symbol(), Timeframe, i) < uBb.lower1) {
+				root = iLow(Symbol(), Timeframe, i);
 				existsRoot = true;
 				break;
 			}
@@ -278,19 +278,21 @@ void UpperCafeaulait(BBPrices bbPrices) {
 			return;
 		}
 
+		PrintStr("[ Add Cafe Object ] Root Is " + to_string(root));
 		Cafeaulait* cafe = new Cafeaulait(root);
 		upCafes.push_back(cafe);
 	}
 
-	if (bbPrices.middle >= iLow(Symbol(), PERIOD_M15, 1)) {
+	if (bbPrices.middle >= iLow(Symbol(), Timeframe, 1)) {
 		for (Cafeaulait* c : upCafes) {
 			if (c->GetState() == Exploded) {
 				c->ModifyState(MiddleTouch);
+				PrintStr("[ Modify Cafe Object ] Root Is " + to_string(c->GetRootPrice()));
 			}
 		}
 	}
 
-	if (iClose(Symbol(), PERIOD_M15, 1) > iOpen(Symbol(), PERIOD_M15, 1)) {
+	if (iClose(Symbol(), Timeframe, 1) > iOpen(Symbol(), Timeframe, 1)) {
 		for (Cafeaulait* c : upCafes) {
 			if (c->GetState() == MiddleTouch) {
 				// エントリー
@@ -311,14 +313,14 @@ void UpperCafeaulait(BBPrices bbPrices) {
 }
 
 void LowerCafeaulait(BBPrices bbPrices) {
-	if (iLow(Symbol(), PERIOD_M15, 1) <= bbPrices.lower2) {
+	if (iLow(Symbol(), Timeframe, 1) <= bbPrices.lower2) {
 		// 根本探索
 		bool existsRoot = false;
 		double root;
-		for (int i = 2; i < iBars(Symbol(), PERIOD_M15); i++) {
+		for (int i = 2; i < iBars(Symbol(), Timeframe); i++) {
 			BBPrices uBb = bb15m->GetPrices(i);
-			if (iClose(Symbol(), PERIOD_M15, i) > uBb.upper1) {
-				root = iHigh(Symbol(), PERIOD_M15, i);
+			if (iClose(Symbol(), Timeframe, i) > uBb.upper1) {
+				root = iHigh(Symbol(), Timeframe, i);
 				existsRoot = true;
 				break;
 			}
@@ -332,7 +334,7 @@ void LowerCafeaulait(BBPrices bbPrices) {
 		lowCafes.push_back(cafe);
 	}
 
-	if (bbPrices.middle <= iHigh(Symbol(), PERIOD_M15, 1)) {
+	if (bbPrices.middle <= iHigh(Symbol(), Timeframe, 1)) {
 		for (Cafeaulait* c : lowCafes) {
 			if (c->GetState() == Exploded) {
 				c->ModifyState(MiddleTouch);
@@ -340,7 +342,7 @@ void LowerCafeaulait(BBPrices bbPrices) {
 		}
 	}
 
-	if (iClose(Symbol(), PERIOD_M15, 1) < iOpen(Symbol(), PERIOD_M15, 1)) {
+	if (iClose(Symbol(), Timeframe, 1) < iOpen(Symbol(), Timeframe, 1)) {
 		for (Cafeaulait* c : lowCafes) {
 			if (c->GetState() == MiddleTouch) {
 				// エントリー
