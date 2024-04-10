@@ -86,15 +86,18 @@ enum CafeaulaitState {
 class Cafeaulait {
 private:
 	double _rootPrice;
+	double _topPrice;
 	CafeaulaitState _state;
 public:
-	Cafeaulait(double rootPrice);
+	Cafeaulait(double rootPrice, double topPrice);
 	void ModifyState(CafeaulaitState state);
 	CafeaulaitState GetState();
 	double GetRootPrice();
+	double GetTopPrice();
 };
-Cafeaulait::Cafeaulait(double rootPrice)
+Cafeaulait::Cafeaulait(double rootPrice, double topPrice)
 {
+	_topPrice = topPrice;
 	_rootPrice = rootPrice;
 	_state = Exploded;
 }
@@ -111,6 +114,10 @@ CafeaulaitState Cafeaulait::GetState()
 
 double Cafeaulait::GetRootPrice() {
 	return _rootPrice;
+}
+
+double Cafeaulait::GetTopPrice() {
+	return _topPrice;
 }
 #pragma endregion
 #pragma region Stf
@@ -192,6 +199,8 @@ Stf* stfH1;
 vector<Cafeaulait*> upCafes;
 vector<Cafeaulait*> lowCafes;
 
+Cafeaulait* upCafe;
+
 bool StfD1Filter;
 bool StfH4Filter;
 bool StfH1Filter;
@@ -234,12 +243,12 @@ EXPORT void __stdcall  ResetStrategy()
 EXPORT void __stdcall GetSingleTick()
 {
   SetCurrencyAndTimeframe(Symbol(), Timeframe);
-  // D1STF
-  SetStfD1Filter();
-  // H4STF
-  SetStfH4Filter();
-  // H1STF
-  SetStfH1Filter();
+  //// D1STF
+  //SetStfD1Filter();
+  //// H4STF
+  //SetStfH4Filter();
+  //// H1STF
+  //SetStfH1Filter();
 
   // 15Mカフェオレ
   if (OpenTime == NULL) {
@@ -248,20 +257,25 @@ EXPORT void __stdcall GetSingleTick()
   if (OpenTime != iTime(Symbol(), Timeframe, 0)) {
 	  OpenTime = iTime(Symbol(), Timeframe, 0);
 	  BBPrices bb = bb15m->GetPrices(1);
-	  if (CanLongEntry()) {
-		// 上カフェオレ
-		UpperCafeaulait(bb);
-	  }
+	  UpperCafeaulait(bb);
+	 // if (CanLongEntry()) {
+		//// 上カフェオレ
+		//UpperCafeaulait(bb);
+	 // }
 
-	  if (CanShortEntry()) {
-		// 下カフェオレ
-		LowerCafeaulait(bb);
-	  }
+	 // if (CanShortEntry()) {
+		//// 下カフェオレ
+		//LowerCafeaulait(bb);
+	 // }
   }
 }
 
+int candlePeriod = 8;
+bool isExplodedLong = false;
+int candleCountLong = 0;
 void UpperCafeaulait(BBPrices bbPrices) {
-	if (iHigh(Symbol(), Timeframe, 1) >= bbPrices.upper2) {
+	double high = iHigh(Symbol(), Timeframe, 1);
+	if (!isExplodedLong && high >= bbPrices.upper2) {
 		// 根本探索
 		bool existsRoot = false;
 		double root;
@@ -278,16 +292,57 @@ void UpperCafeaulait(BBPrices bbPrices) {
 			return;
 		}
 
-		PrintStr("[ Add Cafe Object ] Root Is " + to_string(root));
-		Cafeaulait* cafe = new Cafeaulait(root);
-		upCafes.push_back(cafe);
+		PrintStr("[ Add Cafe Object ] Root Is " + to_string(root) + " / High Is " + to_string(high));
+		upCafe = new Cafeaulait(root, high);
+		isExplodedLong = true;
+		candleCountLong = 0;
+		return;
 	}
 
-	if (bbPrices.middle >= iLow(Symbol(), Timeframe, 1)) {
-		for (Cafeaulait* c : upCafes) {
-			if (c->GetState() == Exploded) {
-				c->ModifyState(MiddleTouch);
-				PrintStr("[ Modify Cafe Object ] Root Is " + to_string(c->GetRootPrice()));
+	if (isExplodedLong && upCafe != NULL) {
+		double close = iClose(Symbol(), Timeframe, 1);
+		// 根本、頂点のどちらかを終値で更新した場合は破棄
+		if (upCafe->GetTopPrice() < close || upCafe->GetRootPrice() > close) {
+			delete upCafe;
+			isExplodedLong = false;
+			PrintStr("[ Delete Cafe Object ] Break Root or Top");
+			return;
+		}
+
+		// 爆発後のミドルタッチ判定
+		if (upCafe->GetState() == Exploded && bbPrices.middle >= iLow(Symbol(), Timeframe, 1)) {
+			upCafe->ModifyState(MiddleTouch);
+			PrintStr("[ Modify Cafe Object ] Root Is " + to_string(upCafe->GetRootPrice()));
+			return;
+		}
+
+		if (upCafe->GetState() == MiddleTouch) {
+			// ミドルタッチ後、ローソク足のカウントスタート
+			candleCountLong += 1;
+			// ローソク足が8本経過したらカフェオレオブジェクト破棄
+			if (candleCountLong >= candlePeriod) {
+				delete upCafe;
+				isExplodedLong = false;
+				PrintStr("[ Delete Cafe Object ] Over Period");
+				return;
+			}
+
+			double open = iOpen(Symbol(), Timeframe, 1);
+			// ミドルタッチ後、陽線確定でエントリー
+			if (close > open) {
+				// エントリー
+				double root = upCafe->GetRootPrice();
+				double diff = Ask() - root;
+				double tp = Ask() + diff;
+				int oh;
+				if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
+					Print("long entry error!!");
+				}
+
+				delete upCafe;
+				isExplodedLong = false;
+				PrintStr("[ Delete Cafe Object ] Long Entried");
+				return;
 			}
 		}
 	}
@@ -312,8 +367,9 @@ void UpperCafeaulait(BBPrices bbPrices) {
 	}
 }
 
+bool waitingMiddleTouchShort = false;
 void LowerCafeaulait(BBPrices bbPrices) {
-	if (iLow(Symbol(), Timeframe, 1) <= bbPrices.lower2) {
+	if (!waitingMiddleTouchShort && iLow(Symbol(), Timeframe, 1) <= bbPrices.lower2) {
 		// 根本探索
 		bool existsRoot = false;
 		double root;
@@ -330,8 +386,9 @@ void LowerCafeaulait(BBPrices bbPrices) {
 			return;
 		}
 
-		Cafeaulait* cafe = new Cafeaulait(root);
+		Cafeaulait* cafe = new Cafeaulait(root, 0);
 		lowCafes.push_back(cafe);
+		waitingMiddleTouchShort = true;
 	}
 
 	if (bbPrices.middle <= iHigh(Symbol(), Timeframe, 1)) {
@@ -340,6 +397,7 @@ void LowerCafeaulait(BBPrices bbPrices) {
 				c->ModifyState(MiddleTouch);
 			}
 		}
+		waitingMiddleTouchShort = false;
 	}
 
 	if (iClose(Symbol(), Timeframe, 1) < iOpen(Symbol(), Timeframe, 1)) {
@@ -415,6 +473,7 @@ void SetStfH1Filter() {
 		else if (StfH1Vector == stfVecLow) {
 			vec = "Low";
 		}
+
 		PrintStr("STF H1 Vector: " + vec);
 	}
 }
