@@ -33,7 +33,7 @@ private:
 	int _bbPeriod;
 	double GetSMA(int index);
 public:
-	BollingerBands(char* symbol, int timeFrame);
+	BollingerBands(char* symbol, int timeFrame, int period);
 	BBPrices GetPrices(int index);
 };
 
@@ -46,11 +46,11 @@ double BollingerBands::GetSMA(int index)
 	return sum / _bbPeriod;
 }
 
-BollingerBands::BollingerBands(char* symbol, int timeFrame)
+BollingerBands::BollingerBands(char* symbol, int timeFrame, int period)
 {
 	_symbol = symbol;
 	_timeFrame = timeFrame;
-	_bbPeriod = 20;
+	_bbPeriod = period;
 }
 
 BBPrices BollingerBands::GetPrices(int index)
@@ -121,6 +121,14 @@ double Cafeaulait::GetTopPrice() {
 }
 #pragma endregion
 #pragma region Stf
+enum StfArea {
+	areaUnknown,
+	areaUpperIkeIke,
+	areaLowerIkeIke,
+	areaUpperMiddle,
+	areaLowerMiddle,
+};
+
 enum StfVector {
 	stfVecUp,
 	stfVecLow,
@@ -131,17 +139,20 @@ class Stf {
 private:
 	char* _symbol;
 	int _timeFrame;
+	int _period;
 	BollingerBands* _bb;
 public:
-	Stf(char* symbol, int timeFrame);
+	Stf(char* symbol, int timeFrame, int period);
 	~Stf();
 	StfVector GetVector();
+	StfArea GetArea();
 };
 
-Stf::Stf(char* symbol, int timeFrame){
+Stf::Stf(char* symbol, int timeFrame, int period){
 	_symbol = symbol;
 	_timeFrame = timeFrame;
-	_bb = new BollingerBands(symbol, timeFrame);
+	_period = period;
+	_bb = new BollingerBands(symbol, timeFrame, period);
 }
 
 Stf::~Stf() {
@@ -149,7 +160,11 @@ Stf::~Stf() {
 }
 
 StfVector Stf::GetVector() {
-	for (int i = 1; i < iBars(Symbol(), _timeFrame); i++) {
+	int barCount = iBars(Symbol(), _timeFrame);
+	if (_period > barCount) {
+		return stfVecNone;
+	}
+	for (int i = 1; i < barCount; i++) {
 		BBPrices bbPrices = _bb->GetPrices(i);
 		double dayClose = iClose(Symbol(), _timeFrame, i);
 
@@ -162,22 +177,37 @@ StfVector Stf::GetVector() {
 	}
 	return stfVecNone;
 }
+
+StfArea Stf::GetArea() {
+	int barCount = iBars(Symbol(), _timeFrame);
+	if (_period > barCount) {
+		return StfArea::areaUnknown;
+	}
+
+	BBPrices bbPrices = _bb->GetPrices(0);
+	double open = iOpen(Symbol(), _timeFrame, 0);
+	if (bbPrices.upper1 < open) {
+		return StfArea::areaUpperIkeIke;
+	}
+	else if (bbPrices.lower1 > open) {
+		return StfArea::areaLowerIkeIke;
+	}
+	else if (bbPrices.upper1 > open && bbPrices.middle < open) {
+		return StfArea::areaUpperMiddle;
+	}
+	else if (bbPrices.lower1 < open && bbPrices.middle > open) {
+		return StfArea::areaLowerMiddle;
+	}
+
+	return StfArea::areaUnknown;
+}
 #pragma endregion
 
 double OpenTime;
 double OpenTimeD1;
 double OpenTimeH4;
 double OpenTimeH1;
-bool IsUpperExplosion = false;
-bool IsLowerExplosion = false;
-bool IsUpperMiddleTouch = false;
-bool IsLowerMiddleTouch = false;
-bool IsLongEntried = false;
-bool IsShortEntried = false;
-int LongOrderHandle = -1;
-int ShortOrderHandle = -1;
-double UpperExplosionRoot;
-double LowerExplosionRoot;
+
 StfVector StfD1Vector = stfVecNone;
 StfVector StfH4Vector = stfVecNone;
 StfVector StfH1Vector = stfVecNone;
@@ -196,15 +226,21 @@ BollingerBands *bb15m;
 Stf* stfD1;
 Stf* stfH4;
 Stf* stfH1;
-vector<Cafeaulait*> upCafes;
-vector<Cafeaulait*> lowCafes;
-
 Cafeaulait* upCafe;
+Cafeaulait* lowCafe;
 
 bool StfD1Filter;
 bool StfH4Filter;
 bool StfH1Filter;
 int Timeframe;
+double RewardRatio;
+
+int IkeIkeFilterType;
+enum BBFilterType {
+	None = 0,
+	IkeIkeOnly = 1,
+	NotIkeIkeOnly = 2,
+};
 
 EXPORT void __stdcall InitStrategy()
 {
@@ -213,6 +249,12 @@ EXPORT void __stdcall InitStrategy()
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
+
+  RegOption("D1 IkeIke Filter", ot_EnumType, &IkeIkeFilterType);
+  AddOptionValue("D1 IkeIke Filter", "None");
+  AddOptionValue("D1 IkeIke Filter", "IkeIke Only");
+  AddOptionValue("D1 IkeIke Filter", "Not IkeIke Only");
+  IkeIkeFilterType = BBFilterType::None;
 
   RegOption("H4 STF Filter", ot_Boolean, &StfH4Filter);
   StfH4Filter = true;
@@ -223,10 +265,15 @@ EXPORT void __stdcall InitStrategy()
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
 
-  bb15m = new BollingerBands(Symbol(), Timeframe);
-  stfD1 = new Stf(Symbol(), PERIOD_D1);
-  stfH4 = new Stf(Symbol(), PERIOD_H4);
-  stfH1 = new Stf(Symbol(), PERIOD_H1);
+  RegOption("Reward Ratio", ot_Double, &RewardRatio);
+  RewardRatio = 1.0;
+  SetOptionRange("Reward Ratio", 0.5, 5.0);
+
+  int bbPeriod = 20;
+  bb15m = new BollingerBands(Symbol(), Timeframe, bbPeriod);
+  stfD1 = new Stf(Symbol(), PERIOD_D1, bbPeriod);
+  stfH4 = new Stf(Symbol(), PERIOD_H4, bbPeriod);
+  stfH1 = new Stf(Symbol(), PERIOD_H1, bbPeriod);
 }
 
 EXPORT void __stdcall DoneStrategy()
@@ -243,12 +290,12 @@ EXPORT void __stdcall  ResetStrategy()
 EXPORT void __stdcall GetSingleTick()
 {
   SetCurrencyAndTimeframe(Symbol(), Timeframe);
-  //// D1STF
-  //SetStfD1Filter();
-  //// H4STF
-  //SetStfH4Filter();
-  //// H1STF
-  //SetStfH1Filter();
+  // D1STF
+  SetStfD1Filter();
+  // H4STF
+  SetStfH4Filter();
+  // H1STF
+  SetStfH1Filter();
 
   // 15Mカフェオレ
   if (OpenTime == NULL) {
@@ -258,15 +305,7 @@ EXPORT void __stdcall GetSingleTick()
 	  OpenTime = iTime(Symbol(), Timeframe, 0);
 	  BBPrices bb = bb15m->GetPrices(1);
 	  UpperCafeaulait(bb);
-	 // if (CanLongEntry()) {
-		//// 上カフェオレ
-		//UpperCafeaulait(bb);
-	 // }
-
-	 // if (CanShortEntry()) {
-		//// 下カフェオレ
-		//LowerCafeaulait(bb);
-	 // }
+	  LowerCafeaulait(bb);
   }
 }
 
@@ -292,7 +331,7 @@ void UpperCafeaulait(BBPrices bbPrices) {
 			return;
 		}
 
-		PrintStr("[ Add Cafe Object ] Root Is " + to_string(root) + " / High Is " + to_string(high));
+		PrintStr("[ Upper : Create Cafe Object ] Root Is " + to_string(root) + " / High Is " + to_string(high));
 		upCafe = new Cafeaulait(root, high);
 		isExplodedLong = true;
 		candleCountLong = 0;
@@ -305,14 +344,14 @@ void UpperCafeaulait(BBPrices bbPrices) {
 		if (upCafe->GetTopPrice() < close || upCafe->GetRootPrice() > close) {
 			delete upCafe;
 			isExplodedLong = false;
-			PrintStr("[ Delete Cafe Object ] Break Root or Top");
+			PrintStr("[ Upper : Delete Cafe Object ] Break Root or Top");
 			return;
 		}
 
 		// 爆発後のミドルタッチ判定
 		if (upCafe->GetState() == Exploded && bbPrices.middle >= iLow(Symbol(), Timeframe, 1)) {
 			upCafe->ModifyState(MiddleTouch);
-			PrintStr("[ Modify Cafe Object ] Root Is " + to_string(upCafe->GetRootPrice()));
+			PrintStr("[ Upper : Modify Cafe Object ] Root Is " + to_string(upCafe->GetRootPrice()));
 			return;
 		}
 
@@ -323,17 +362,17 @@ void UpperCafeaulait(BBPrices bbPrices) {
 			if (candleCountLong >= candlePeriod) {
 				delete upCafe;
 				isExplodedLong = false;
-				PrintStr("[ Delete Cafe Object ] Over Period");
+				PrintStr("[ Upper : Delete Cafe Object ] Over Period");
 				return;
 			}
 
 			double open = iOpen(Symbol(), Timeframe, 1);
 			// ミドルタッチ後、陽線確定でエントリー
-			if (close > open) {
+			if (CanLongEntry() && close > open) {
 				// エントリー
 				double root = upCafe->GetRootPrice();
 				double diff = Ask() - root;
-				double tp = Ask() + diff;
+				double tp = Ask() + (diff * RewardRatio);
 				int oh;
 				if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
 					Print("long entry error!!");
@@ -341,35 +380,18 @@ void UpperCafeaulait(BBPrices bbPrices) {
 
 				delete upCafe;
 				isExplodedLong = false;
-				PrintStr("[ Delete Cafe Object ] Long Entried");
+				PrintStr("[ Upper : Delete Cafe Object ] Long Entried");
 				return;
-			}
-		}
-	}
-
-	if (iClose(Symbol(), Timeframe, 1) > iOpen(Symbol(), Timeframe, 1)) {
-		for (Cafeaulait* c : upCafes) {
-			if (c->GetState() == MiddleTouch) {
-				// エントリー
-				double root = c->GetRootPrice();
-				double diff = Ask() - root;
-				double tp = Ask() + diff;
-				int oh;
-				if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
-					Print("long entry error!!");
-				}
-				else {
-					auto end = remove(upCafes.begin(), upCafes.end(), c);
-					upCafes.erase(end, upCafes.end());
-				}
 			}
 		}
 	}
 }
 
-bool waitingMiddleTouchShort = false;
+bool isExplodedShort = false;
+int candleCountShort = 0;
 void LowerCafeaulait(BBPrices bbPrices) {
-	if (!waitingMiddleTouchShort && iLow(Symbol(), Timeframe, 1) <= bbPrices.lower2) {
+	double low = iLow(Symbol(), Timeframe, 1);
+	if (!isExplodedShort && low <= bbPrices.lower2) {
 		// 根本探索
 		bool existsRoot = false;
 		double root;
@@ -386,35 +408,57 @@ void LowerCafeaulait(BBPrices bbPrices) {
 			return;
 		}
 
-		Cafeaulait* cafe = new Cafeaulait(root, 0);
-		lowCafes.push_back(cafe);
-		waitingMiddleTouchShort = true;
+		PrintStr("[ Low : Create Cafe Object ] Root Is " + to_string(root) + " / Low Is " + to_string(low));
+		lowCafe = new Cafeaulait(root, low);
+		isExplodedShort = true;
+		candleCountShort = 0;
+		return;
 	}
 
-	if (bbPrices.middle <= iHigh(Symbol(), Timeframe, 1)) {
-		for (Cafeaulait* c : lowCafes) {
-			if (c->GetState() == Exploded) {
-				c->ModifyState(MiddleTouch);
-			}
+	if (isExplodedShort && lowCafe != NULL) {
+		double close = iClose(Symbol(), Timeframe, 1);
+		// 根本、頂点のどちらかを終値で更新した場合は破棄
+		if (lowCafe->GetTopPrice() > close || lowCafe->GetRootPrice() < close) {
+			delete lowCafe;
+			isExplodedShort = false;
+			PrintStr("[ Low : Delete Cafe Object ] Break Root or Top");
+			return;
 		}
-		waitingMiddleTouchShort = false;
-	}
 
-	if (iClose(Symbol(), Timeframe, 1) < iOpen(Symbol(), Timeframe, 1)) {
-		for (Cafeaulait* c : lowCafes) {
-			if (c->GetState() == MiddleTouch) {
+		// 爆発後のミドルタッチ判定
+		if (lowCafe->GetState() == Exploded && bbPrices.middle <= iHigh(Symbol(), Timeframe, 1)) {
+			lowCafe->ModifyState(MiddleTouch);
+			PrintStr("[ Low : Modify Cafe Object ] Root Is " + to_string(lowCafe->GetRootPrice()));
+			return;
+		}
+
+		if (lowCafe->GetState() == MiddleTouch) {
+			// ミドルタッチ後、ローソク足のカウントスタート
+			candleCountShort += 1;
+			// ローソク足が8本経過したらカフェオレオブジェクト破棄
+			if (candleCountShort >= candlePeriod) {
+				delete lowCafe;
+				isExplodedShort = false;
+				PrintStr("[ Low : Delete Cafe Object ] Over Period");
+				return;
+			}
+
+			double open = iOpen(Symbol(), Timeframe, 1);
+			// ミドルタッチ後、陰線確定でエントリー
+			if (CanShortEntry() && close < open) {
 				// エントリー
-				double root = c->GetRootPrice();
+				double root = lowCafe->GetRootPrice();
 				double diff = root - Bid();
-				double tp = Bid() - diff;
+				double tp = Bid() - (diff * RewardRatio);
 				int oh;
 				if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
 					Print("short entry error!!");
 				}
-				else {
-					auto end = remove(lowCafes.begin(), lowCafes.end(), c);
-					lowCafes.erase(end, lowCafes.end());
-				}
+
+				delete lowCafe;
+				isExplodedShort = false;
+				PrintStr("[ Low : Delete Cafe Object ] Short Entried");
+				return;
 			}
 		}
 	}
@@ -478,7 +522,7 @@ void SetStfH1Filter() {
 	}
 }
 
-bool CanLongEntry() {
+bool StfFilterLong() {
 	if (!StfD1Filter) {
 		return true;
 	}
@@ -502,7 +546,37 @@ bool CanLongEntry() {
 	return false;
 }
 
-bool CanShortEntry() {
+bool IkeIkeFilterLong() {
+	if (IkeIkeFilterType == BBFilterType::None) {
+		return true;
+	}
+	
+	StfArea stfArea = stfD1->GetArea();
+	if (IkeIkeFilterType == BBFilterType::IkeIkeOnly) {
+		if (stfArea == StfArea::areaUpperIkeIke) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else if (IkeIkeFilterType == BBFilterType::NotIkeIkeOnly) {
+		if (stfArea == StfArea::areaUpperIkeIke) {
+			return false;
+		}
+		else {
+			return true;
+		}
+	}
+}
+
+bool CanLongEntry() {
+	bool stfFilter = StfFilterLong();
+	bool ikeikeFilter = IkeIkeFilterLong();
+	return (stfFilter && ikeikeFilter);
+}
+
+bool StfFilterShort() {
 	if (!StfD1Filter) {
 		return true;
 	}
@@ -524,4 +598,34 @@ bool CanShortEntry() {
 	}
 
 	return false;
+}
+
+bool IkeIkeFilterShort() {
+	if (IkeIkeFilterType == BBFilterType::None) {
+		return true;
+	}
+
+	StfArea stfArea = stfD1->GetArea();
+	if (IkeIkeFilterType == BBFilterType::IkeIkeOnly) {
+		if (stfArea == StfArea::areaLowerIkeIke) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else if (IkeIkeFilterType == BBFilterType::NotIkeIkeOnly) {
+		if (stfArea == StfArea::areaLowerIkeIke) {
+			return false;
+		}
+		else {
+			return true;
+		}
+	}
+}
+
+bool CanShortEntry() {
+	bool stfFilter = StfFilterShort();
+	bool ikeikeFilter = IkeIkeFilterShort();
+	return (stfFilter && ikeikeFilter);
 }
