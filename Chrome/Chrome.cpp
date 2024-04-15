@@ -129,6 +129,12 @@ enum StfArea {
 	areaLowerMiddle,
 };
 
+enum StfOrbit {
+	stfOrbitUp,
+	stfOrbitDown,
+	stfOrbitUnknown
+};
+
 enum StfVector {
 	stfVecUp,
 	stfVecLow,
@@ -141,11 +147,13 @@ private:
 	int _timeFrame;
 	int _period;
 	BollingerBands* _bb;
+	StfArea _beforeStfArea;
 public:
 	Stf(char* symbol, int timeFrame, int period);
 	~Stf();
 	StfVector GetVector();
 	StfArea GetArea();
+	StfOrbit GetOrbit();
 };
 
 Stf::Stf(char* symbol, int timeFrame, int period){
@@ -153,6 +161,7 @@ Stf::Stf(char* symbol, int timeFrame, int period){
 	_timeFrame = timeFrame;
 	_period = period;
 	_bb = new BollingerBands(symbol, timeFrame, period);
+	_beforeStfArea = StfArea::areaUnknown;
 }
 
 Stf::~Stf() {
@@ -201,6 +210,92 @@ StfArea Stf::GetArea() {
 
 	return StfArea::areaUnknown;
 }
+
+StfOrbit Stf::GetOrbit() {
+	StfArea currentArea = GetArea();
+	// 現在のエリアのみで判定
+	if (currentArea == areaUnknown) {
+		_beforeStfArea = currentArea;
+		return stfOrbitUnknown;
+	}
+	else if (currentArea == areaUpperIkeIke) {
+		_beforeStfArea = currentArea;
+		return stfOrbitUp;
+	}
+	else if (currentArea == areaLowerIkeIke) {
+		_beforeStfArea = currentArea;
+		return stfOrbitDown;
+	}
+
+	// 直前のエリア込みで判定
+	if (_beforeStfArea == areaUnknown) {
+		return stfOrbitUnknown;
+	}
+
+	BBPrices bbPrices = _bb->GetPrices(1);
+	// 上イケ脱
+	if (_beforeStfArea == areaUpperIkeIke) {
+		double low = iLow(Symbol(), _timeFrame, 1);
+		// ～始値がミドル上
+		if (currentArea == areaUpperMiddle) {
+			// ミドルタッチしている場合
+			if (bbPrices.middle >= low) {
+				// ミドル曲げ
+				return stfOrbitUp;
+			}
+			else {
+				// ミドル触りに行く
+				return stfOrbitDown;
+			}
+		}
+		// ～始値がミドル下
+		else if (currentArea == areaLowerMiddle) {
+			// -1σタッチしている場合
+			if (bbPrices.lower1 >= low) {
+				// -1σ曲げ
+				return stfOrbitUp;
+			}
+			else {
+				// -1σ触りに行く
+				return stfOrbitDown;
+			}
+		}
+	}
+	// 下イケ脱
+	else if (_beforeStfArea == areaLowerIkeIke) {
+		double high = iHigh(Symbol(), _timeFrame, 1);
+		// ～始値がミドル下
+		if (currentArea == areaLowerMiddle) {
+			// ミドルタッチしている場合
+			if (bbPrices.middle <= high) {
+				// ミドル曲げ
+				return stfOrbitDown;
+			}
+			else {
+				// ミドル触りに行く
+				return stfOrbitUp;
+			}
+		}
+		// ～始値がミドル上
+		else if (currentArea == areaUpperMiddle) {
+			// +1σタッチしている場合
+			if (bbPrices.upper1 <= high) {
+				// +1σ曲げ
+				return stfOrbitDown;
+			}
+			else {
+				// +1σ触りに行く
+				return stfOrbitUp;
+			}
+		}
+	}
+	// ミドル上
+	else if (_beforeStfArea == areaUpperMiddle) {
+
+	}
+
+	return stfOrbitUnknown;
+}
 #pragma endregion
 
 double OpenTime;
@@ -244,8 +339,8 @@ enum BBFilterType {
 
 EXPORT void __stdcall InitStrategy()
 {
-  StrategyShortName("CafeAuLait");
-  StrategyDescription("Cafe au lait");
+  StrategyShortName("Chrome");
+  StrategyDescription("Chrome Rule EA");
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
