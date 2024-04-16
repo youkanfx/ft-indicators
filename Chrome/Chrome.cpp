@@ -933,10 +933,14 @@ bool CanLongEntry(double et, double tp) {
 	string msg = "[ CanLongEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
 		" / W1 PP Filter:" + boolToStr(w1PPRRFilter) +
-		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
+		" / D1 PP Filter:" + boolToStr(d1PPRRFilter) +
+		" / D1 Orbit Filter:" + boolToStr(d1OrbitFilter) +
+		" / H4 Orbit Filter:" + boolToStr(h4OrbitFilter) +
+		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter);
 	PrintStr(msg);
 
-	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
+					d1OrbitFilter && h4OrbitFilter && h1OrbitFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
@@ -1032,19 +1036,38 @@ bool D1PPRewardFilterShort(double et, double tp) {
 	return true;
 }
 
+bool StfOrbitFilterShort(bool enableFilter, StfOrbit orbit) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (orbit != stfOrbitDown) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanShortEntry(double et, double tp) {
 	bool stfFilter = StfFilterShort();
 	bool ikeikeFilter = IkeIkeFilterShort();
 	bool w1PPRRFilter = W1PPRewardFilterShort(et, tp);
 	bool d1PPRRFilter = D1PPRewardFilterShort(et, tp);
+	bool d1OrbitFilter = StfOrbitFilterShort(StfOrbitD1Filter, StfD1Orbit);
+	bool h4OrbitFilter = StfOrbitFilterShort(StfOrbitH4Filter, StfH4Orbit);
+	bool h1OrbitFilter = StfOrbitFilterShort(StfOrbitH1Filter, StfH1Orbit);
 
 	string msg = "[ CanShortEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
 		" / W1 PP Filter:" + boolToStr(w1PPRRFilter) +
-		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
+		" / D1 PP Filter:" + boolToStr(d1PPRRFilter) +
+		" / D1 Orbit Filter:" + boolToStr(d1OrbitFilter) +
+		" / H4 Orbit Filter:" + boolToStr(h4OrbitFilter) +
+		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter);
 	PrintStr(msg);
 
-	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
+		d1OrbitFilter && h4OrbitFilter && h1OrbitFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
