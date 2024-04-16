@@ -434,7 +434,73 @@ bool PivotPoints::Calculate() {
 	return true;
 }
 #pragma endregion
+#pragma region Mesen
+enum MesenMode {
+	Simple,
+};
+enum MesenVector {
+	mesenVectorUp,
+	mesenVectorDown,
+	mesenVectorUnknown,
+};
+class Mesen {
+	MesenMode _mode;
+	int _timeFrame;
+	int _count;
+	double _mesenPrice;
+	MesenVector _currentVector;
+	MesenVector firstVector();
+public:
+	Mesen(int timeFrame, int count);
+	MesenVector Vector();
+	double MesenPrice();
+};
 
+Mesen::Mesen(int timeFrame, int count = 100) {
+	_mode = MesenMode::Simple;
+	_timeFrame = timeFrame;
+	_count = count;
+	_mesenPrice = 0;
+	_currentVector = firstVector();
+}
+
+MesenVector Mesen::firstVector() {
+	int barCount = iBars(Symbol(), _timeFrame);
+	if (barCount > _count) {
+		barCount = _count;
+	}
+
+	bool preYousen = iOpen(Symbol(), _timeFrame, barCount) < iClose(Symbol(), _timeFrame, barCount);
+	double tmpMesenPrice = 0;
+	for (int i = (barCount - 1); i > 0; i--) {
+		double open = iOpen(Symbol(), _timeFrame, i);
+		double close = iClose(Symbol(), _timeFrame, i);
+		bool currentYousen = open < close;
+
+		if (preYousen != currentYousen) {
+
+		}
+
+		preYousen = currentYousen;
+	}
+}
+
+MesenVector Mesen::Vector() {
+	int barCount = iBars(Symbol(), _timeFrame);
+	MesenVector vec = mesenVectorUnknown;
+
+	for (int i = 1; i < barCount; i++) {
+	}
+	return vec;
+}
+
+double Mesen::MesenPrice() {
+	return _mesenPrice;
+}
+#pragma endregion
+
+
+#pragma region Global Parameters
 double OpenTime;
 double OpenTimeW1;
 double OpenTimeD1;
@@ -490,6 +556,7 @@ enum BBFilterType {
 	IkeIkeOnly = 1,
 	NotIkeIkeOnly = 2,
 };
+#pragma endregion
 
 EXPORT void __stdcall InitStrategy()
 {
