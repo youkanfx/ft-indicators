@@ -909,11 +909,26 @@ bool D1PPRewardFilterLong(double et, double tp) {
 	return true;
 }
 
+bool StfOrbitFilterLong(bool enableFilter, StfOrbit orbit) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (orbit != stfOrbitUp) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanLongEntry(double et, double tp) {
 	bool stfFilter = StfFilterLong();
 	bool ikeikeFilter = IkeIkeFilterLong();
 	bool w1PPRRFilter = W1PPRewardFilterLong(et, tp);
 	bool d1PPRRFilter = D1PPRewardFilterLong(et, tp);
+	bool d1OrbitFilter = StfOrbitFilterLong(StfOrbitD1Filter, StfD1Orbit);
+	bool h4OrbitFilter = StfOrbitFilterLong(StfOrbitH4Filter, StfH4Orbit);
+	bool h1OrbitFilter = StfOrbitFilterLong(StfOrbitH1Filter, StfH1Orbit);
 
 	string msg = "[ CanLongEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
