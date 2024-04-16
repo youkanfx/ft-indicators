@@ -242,10 +242,12 @@ StfOrbit Stf::GetOrbit() {
 			// ミドルタッチしている場合
 			if (bbPrices.middle >= low) {
 				// ミドル曲げ
+				_beforeStfArea = currentArea;
 				return stfOrbitUp;
 			}
 			else {
 				// ミドル触りに行く
+				_beforeStfArea = currentArea;
 				return stfOrbitDown;
 			}
 		}
@@ -254,10 +256,12 @@ StfOrbit Stf::GetOrbit() {
 			// -1σタッチしている場合
 			if (bbPrices.lower1 >= low) {
 				// -1σ曲げ
+				_beforeStfArea = currentArea;
 				return stfOrbitUp;
 			}
 			else {
 				// -1σ触りに行く
+				_beforeStfArea = currentArea;
 				return stfOrbitDown;
 			}
 		}
@@ -270,10 +274,12 @@ StfOrbit Stf::GetOrbit() {
 			// ミドルタッチしている場合
 			if (bbPrices.middle <= high) {
 				// ミドル曲げ
+				_beforeStfArea = currentArea;
 				return stfOrbitDown;
 			}
 			else {
 				// ミドル触りに行く
+				_beforeStfArea = currentArea;
 				return stfOrbitUp;
 			}
 		}
@@ -282,17 +288,91 @@ StfOrbit Stf::GetOrbit() {
 			// +1σタッチしている場合
 			if (bbPrices.upper1 <= high) {
 				// +1σ曲げ
+				_beforeStfArea = currentArea;
 				return stfOrbitDown;
 			}
 			else {
 				// +1σ触りに行く
+				_beforeStfArea = currentArea;
 				return stfOrbitUp;
 			}
 		}
 	}
 	// ミドル上
 	else if (_beforeStfArea == areaUpperMiddle) {
+		// 1σ外は判定済みなのでここでは無視
+		double low = iLow(Symbol(), _timeFrame, 1);
+		double high = iHigh(Symbol(), _timeFrame, 1);
+		// ～引き続き始値がミドル上
+		if (currentArea == areaUpperMiddle) {
+			// ミドル触っておらず、+1σを触っている場合
+			if (high >= bbPrices.upper1 && low > bbPrices.middle) {
+				// 1σ内カチカチ
+				_beforeStfArea = currentArea;
+				return stfOrbitDown;
+			}
+			// +1σ触っておらず、ミドルを触っている場合
+			else if (high < bbPrices.upper1 && low <= bbPrices.middle) {
+				// ミドル曲げ
+				_beforeStfArea = currentArea;
+				return stfOrbitUp;
+			}
+			
+			// それ以外はわからない
+			_beforeStfArea = currentArea;
+			return stfOrbitUnknown;
+		}
+		// ～始値がミドル下
+		else if (currentArea == areaLowerMiddle) {
+			// -1σを触っている場合
+			if (low <= bbPrices.lower1) {
+				// -1σ曲げ
+				_beforeStfArea = currentArea;
+				return stfOrbitUp;
+			}
 
+			// それ以外は下
+			_beforeStfArea = currentArea;
+			return stfOrbitDown;
+		}
+	}
+	// ミドル下
+	else if (_beforeStfArea == areaLowerMiddle) {
+		// 1σ外は判定済みなのでここでは無視
+		double low = iLow(Symbol(), _timeFrame, 1);
+		double high = iHigh(Symbol(), _timeFrame, 1);
+		// ～引き続き始値がミドル下
+		if (currentArea == areaLowerMiddle) {
+			// ミドル触っておらず、-1σを触っている場合
+			if (low <= bbPrices.lower1 && high < bbPrices.middle) {
+				// 1σ内カチカチ
+				_beforeStfArea = currentArea;
+				return stfOrbitUp;
+			}
+			// -1σ触っておらず、ミドルを触っている場合
+			else if (low > bbPrices.lower1 && high >= bbPrices.middle) {
+				// ミドル曲げ
+				_beforeStfArea = currentArea;
+				return stfOrbitDown;
+			}
+
+			// それ以外はわからない
+			_beforeStfArea = currentArea;
+			return stfOrbitUnknown;
+		}
+		// ～始値がミドル上
+		else if (currentArea == areaUpperMiddle) {
+			// +1σを触っている場合
+			if (high >= bbPrices.upper1) {
+				// -1σ曲げ
+				_beforeStfArea = currentArea;
+				return stfOrbitDown;
+			}
+
+			// それ以外は上
+			_beforeStfArea = currentArea;
+			return stfOrbitUp;
+		}
 	}
 
 	return stfOrbitUnknown;
@@ -365,6 +445,10 @@ StfVector StfD1Vector = stfVecNone;
 StfVector StfH4Vector = stfVecNone;
 StfVector StfH1Vector = stfVecNone;
 
+StfOrbit StfD1Orbit = stfOrbitUnknown;
+StfOrbit StfH4Orbit = stfOrbitUnknown;
+StfOrbit StfH1Orbit = stfOrbitUnknown;
+
 void UpperCafeaulait(BBPrices bb);
 void LowerCafeaulait(BBPrices bb);
 
@@ -390,11 +474,15 @@ Cafeaulait* lowCafe;
 bool StfD1Filter;
 bool StfH4Filter;
 bool StfH1Filter;
+bool StfOrbitD1Filter;
+bool StfOrbitH4Filter;
+bool StfOrbitH1Filter;
 int Timeframe;
 double RewardRatio;
 bool PPW1RRFilter;
 bool PPD1RRFilter;
 bool IsShowStatus;
+bool ReverseFilter;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -408,9 +496,6 @@ EXPORT void __stdcall InitStrategy()
   StrategyShortName("Chrome");
   StrategyDescription("Chrome Rule EA");
 
-  RegOption("Show Status", ot_Boolean, &IsShowStatus);
-  IsShowStatus = true;
-
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
 
@@ -420,11 +505,20 @@ EXPORT void __stdcall InitStrategy()
   AddOptionValue("D1 IkeIke Filter", "Not IkeIke Only");
   IkeIkeFilterType = BBFilterType::None;
 
+  RegOption("D1 STF Orbit Filter", ot_Boolean, &StfOrbitD1Filter);
+  StfOrbitD1Filter = true;
+
   RegOption("H4 STF Filter", ot_Boolean, &StfH4Filter);
   StfH4Filter = true;
 
+  RegOption("H4 STF Orbit Filter", ot_Boolean, &StfOrbitH4Filter);
+  StfOrbitH4Filter = false;
+
   RegOption("H1 STF Filter", ot_Boolean, &StfH1Filter);
   StfH1Filter = true;
+
+  RegOption("H1 STF Orbit Filter", ot_Boolean, &StfOrbitH1Filter);
+  StfOrbitH1Filter = false;
 
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
@@ -438,6 +532,12 @@ EXPORT void __stdcall InitStrategy()
 
   RegOption("D1 PivotPoints RR Filter", ot_Boolean, &PPD1RRFilter);
   PPD1RRFilter = true;
+
+  RegOption("Show Status", ot_Boolean, &IsShowStatus);
+  IsShowStatus = true;
+
+  RegOption("Reverse Filter", ot_Boolean, &ReverseFilter);
+  ReverseFilter = false;
 
   int bbPeriod = 20;
   bb15m = new BollingerBands(Symbol(), Timeframe, bbPeriod);
@@ -679,6 +779,7 @@ void D1Setting() {
 		OpenTimeD1 = time;
 
 		StfD1Vector = stfD1->GetVector();
+		StfD1Orbit = stfD1->GetOrbit();
 		ppD1->Calculate();
 		Print("Calculate D1 PP!!");
 	}
@@ -694,6 +795,7 @@ void H4Setting() {
 		OpenTimeH4 = time;
 
 		StfH4Vector = stfH4->GetVector();
+		StfH4Orbit = stfH4->GetOrbit();
 	}
 }
 
@@ -707,6 +809,7 @@ void H1Setting() {
 		OpenTimeH1 = time;
 		
 		StfH1Vector = stfH1->GetVector();
+		StfH1Orbit = stfH1->GetOrbit();
 	}
 }
 
@@ -818,7 +921,8 @@ bool CanLongEntry(double et, double tp) {
 		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
 	PrintStr(msg);
 
-	return (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	return ReverseFilter ? !canEntry : canEntry;
 }
 
 bool StfFilterShort() {
@@ -925,7 +1029,8 @@ bool CanShortEntry(double et, double tp) {
 		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
 	PrintStr(msg);
 
-	return (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+	return ReverseFilter ? !canEntry : canEntry;
 }
 
 string stfVectorStr(StfVector vec) {
