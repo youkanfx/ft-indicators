@@ -5,6 +5,7 @@
 #include "TechnicalFunctions.h"
 #include <string>
 #include <vector>
+#include <tchar.h>
 
 using namespace std;
 
@@ -297,8 +298,65 @@ StfOrbit Stf::GetOrbit() {
 	return stfOrbitUnknown;
 }
 #pragma endregion
+#pragma region Pivot Points
+class PivotPoints {
+private:
+	char* _symbol;
+	int _timeFrame;
+	double _pp;
+	double _r1;
+	double _r2;
+	double _r3;
+	double _s1;
+	double _s2;
+	double _s3;
+public:
+	PivotPoints(char* symbol, int timeFrame);
+	bool Calculate();
+	double PP() { return _pp; };
+	double R1() { return _r1; };
+	double R2() { return _r2; };
+	double R3() { return _r3; };
+	double S1() { return _s1; };
+	double S2() { return _s2; };
+	double S3() { return _s3; };
+};
+
+PivotPoints::PivotPoints(char* symbol, int timeFrame) {
+	_symbol = symbol;
+	_timeFrame = timeFrame;
+	_pp = 0;
+	_r1 = 0;
+	_r2 = 0;
+	_r3 = 0;
+	_s1 = 0;
+	_s2 = 0;
+	_s3 = 0;
+}
+
+bool PivotPoints::Calculate() {
+	double close = iClose(Symbol(), _timeFrame, 1);
+	double high = iHigh(Symbol(), _timeFrame, 1);
+	double low = iLow(Symbol(), _timeFrame, 1);
+
+	if (close <= 0 || high <= 0 || low <= 0) {
+		return false;
+	}
+
+	_pp = (close + high + low) / 3;
+	_r1 = _pp + (_pp - low);
+	_r2 = _pp + (high - low);
+	_r3 = _r1 + (high - low);
+	_s1 = _pp - (high - _pp);
+	_s2 = _pp - (high - low);
+	_s3 = _s1 - (high - low);
+
+	return true;
+}
+#pragma endregion
 
 double OpenTime;
+double OpenTimeW1;
 double OpenTimeD1;
 double OpenTimeH4;
 double OpenTimeH1;
@@ -310,13 +368,18 @@ StfVector StfH1Vector = stfVecNone;
 void UpperCafeaulait(BBPrices bb);
 void LowerCafeaulait(BBPrices bb);
 
-void SetStfD1Filter();
-void SetStfH4Filter();
-void SetStfH1Filter();
+void W1Setting();
+void D1Setting();
+void H4Setting();
+void H1Setting();
 
-bool CanLongEntry();
-bool CanShortEntry();
+bool CanLongEntry(double et, double tp);
+bool CanShortEntry(double et, double tp);
 
+void ShowStatus();
+
+PivotPoints* ppD1;
+PivotPoints* ppW1;
 BollingerBands *bb15m;
 Stf* stfD1;
 Stf* stfH4;
@@ -329,6 +392,9 @@ bool StfH4Filter;
 bool StfH1Filter;
 int Timeframe;
 double RewardRatio;
+bool PPW1RRFilter;
+bool PPD1RRFilter;
+bool IsShowStatus;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -341,6 +407,9 @@ EXPORT void __stdcall InitStrategy()
 {
   StrategyShortName("Chrome");
   StrategyDescription("Chrome Rule EA");
+
+  RegOption("Show Status", ot_Boolean, &IsShowStatus);
+  IsShowStatus = true;
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
@@ -364,11 +433,19 @@ EXPORT void __stdcall InitStrategy()
   RewardRatio = 1.0;
   SetOptionRange("Reward Ratio", 0.5, 5.0);
 
+  RegOption("W1 PivotPoints RR Filter", ot_Boolean, &PPW1RRFilter);
+  PPW1RRFilter = true;
+
+  RegOption("D1 PivotPoints RR Filter", ot_Boolean, &PPD1RRFilter);
+  PPD1RRFilter = true;
+
   int bbPeriod = 20;
   bb15m = new BollingerBands(Symbol(), Timeframe, bbPeriod);
   stfD1 = new Stf(Symbol(), PERIOD_D1, bbPeriod);
   stfH4 = new Stf(Symbol(), PERIOD_H4, bbPeriod);
   stfH1 = new Stf(Symbol(), PERIOD_H1, bbPeriod);
+  ppW1 = new PivotPoints(Symbol(), PERIOD_W1);
+  ppD1 = new PivotPoints(Symbol(), PERIOD_D1);
 }
 
 EXPORT void __stdcall DoneStrategy()
@@ -377,6 +454,11 @@ EXPORT void __stdcall DoneStrategy()
 	delete stfD1;
 	delete stfH4;
 	delete stfH1;
+	delete ppW1;
+	delete ppD1;
+	if (ObjectExists("chrome_status")) {
+		ObjectDelete("chrome_status");
+	}
 }
 
 EXPORT void __stdcall  ResetStrategy()
@@ -385,12 +467,18 @@ EXPORT void __stdcall  ResetStrategy()
 EXPORT void __stdcall GetSingleTick()
 {
   SetCurrencyAndTimeframe(Symbol(), Timeframe);
-  // D1STF
-  SetStfD1Filter();
-  // H4STF
-  SetStfH4Filter();
-  // H1STF
-  SetStfH1Filter();
+  // W1 Setting
+  W1Setting();
+  // D1 Setting
+  D1Setting();
+  // H4 Setting
+  H4Setting();
+  // H1 Setting
+  H1Setting();
+
+  if (IsShowStatus) {
+	  ShowStatus();
+  }
 
   // 15Mカフェオレ
   if (OpenTime == NULL) {
@@ -463,20 +551,24 @@ void UpperCafeaulait(BBPrices bbPrices) {
 
 			double open = iOpen(Symbol(), Timeframe, 1);
 			// ミドルタッチ後、陽線確定でエントリー
-			if (CanLongEntry() && close > open) {
+			if (close > open) {
 				// エントリー
+				double et = Ask();
 				double root = upCafe->GetRootPrice();
-				double diff = Ask() - root;
-				double tp = Ask() + (diff * RewardRatio);
+				double diff = et - root;
+				double tp = et + (diff * RewardRatio);
 				int oh;
-				if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
-					Print("long entry error!!");
-				}
 
-				delete upCafe;
-				isExplodedLong = false;
-				PrintStr("[ Upper : Delete Cafe Object ] Long Entried");
-				return;
+				if (CanLongEntry(et, tp)) {
+					if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
+						Print("long entry error!!");
+					}
+
+					delete upCafe;
+					isExplodedLong = false;
+					PrintStr("[ Upper : Delete Cafe Object ] Long Entried");
+					return;
+				}
 			}
 		}
 	}
@@ -540,81 +632,86 @@ void LowerCafeaulait(BBPrices bbPrices) {
 
 			double open = iOpen(Symbol(), Timeframe, 1);
 			// ミドルタッチ後、陰線確定でエントリー
-			if (CanShortEntry() && close < open) {
+			if (close < open) {
 				// エントリー
+				double et = Bid();
 				double root = lowCafe->GetRootPrice();
-				double diff = root - Bid();
-				double tp = Bid() - (diff * RewardRatio);
+				double diff = root - et;
+				double tp = et - (diff * RewardRatio);
 				int oh;
-				if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
-					Print("short entry error!!");
-				}
 
-				delete lowCafe;
-				isExplodedShort = false;
-				PrintStr("[ Low : Delete Cafe Object ] Short Entried");
-				return;
+				if (CanShortEntry(et, tp)) {
+					if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
+						Print("short entry error!!");
+					}
+
+					delete lowCafe;
+					isExplodedShort = false;
+					PrintStr("[ Low : Delete Cafe Object ] Short Entried");
+					return;
+				}
 			}
 		}
 	}
 }
 
-void SetStfD1Filter() {
+void W1Setting() {
+	double time = iTime(Symbol(), PERIOD_W1, 0);
+	if (OpenTimeW1 == NULL) {
+		OpenTimeW1 = time;
+	}
+
+	if (OpenTimeW1 != time) {
+		OpenTimeW1 = time;
+
+		ppW1->Calculate();
+		Print("Calculate W1 PP!!");
+	}
+}
+
+void D1Setting() {
+	double time = iTime(Symbol(), PERIOD_D1, 0);
 	if (OpenTimeD1 == NULL) {
-		OpenTimeD1 = iTime(Symbol(), PERIOD_D1, 0);
+		OpenTimeD1 = time;
 	}
 
-	if (OpenTimeD1 != iTime(Symbol(), PERIOD_D1, 0)) {
-		OpenTimeD1 = iTime(Symbol(), PERIOD_D1, 0);
+	if (OpenTimeD1 != time) {
+		OpenTimeD1 = time;
+
 		StfD1Vector = stfD1->GetVector();
-		string vec = "None";
-		if (StfD1Vector == stfVecUp) {
-			vec = "Up";
-		}
-		else if (StfD1Vector == stfVecLow) {
-			vec = "Low";
-		}
-		PrintStr("STF D1 Vector: " + vec);
+		ppD1->Calculate();
+		Print("Calculate D1 PP!!");
 	}
 }
 
-void SetStfH4Filter() {
+void H4Setting() {
+	double time = iTime(Symbol(), PERIOD_H4, 0);
 	if (OpenTimeH4 == NULL) {
-		OpenTimeH4 = iTime(Symbol(), PERIOD_H4, 0);
+		OpenTimeH4 = time;
 	}
 
-	if (OpenTimeH4 != iTime(Symbol(), PERIOD_H4, 0)) {
-		OpenTimeH4 = iTime(Symbol(), PERIOD_H4, 0);
+	if (OpenTimeH4 != time) {
+		OpenTimeH4 = time;
+
 		StfH4Vector = stfH4->GetVector();
-		string vec = "None";
-		if (StfH4Vector == stfVecUp) {
-			vec = "Up";
-		}
-		else if (StfH4Vector == stfVecLow) {
-			vec = "Low";
-		}
-		PrintStr("STF H4 Vector: " + vec);
 	}
 }
 
-void SetStfH1Filter() {
+void H1Setting() {
+	double time = iTime(Symbol(), PERIOD_H1, 0);
 	if (OpenTimeH1 == NULL) {
-		OpenTimeH1 = iTime(Symbol(), PERIOD_H1, 0);
+		OpenTimeH1 = time;
 	}
 
-	if (OpenTimeH1 != iTime(Symbol(), PERIOD_H1, 0)) {
-		OpenTimeH1 = iTime(Symbol(), PERIOD_H1, 0);
+	if (OpenTimeH1 != time) {
+		OpenTimeH1 = time;
+		
 		StfH1Vector = stfH1->GetVector();
-		string vec = "None";
-		if (StfH1Vector == stfVecUp) {
-			vec = "Up";
-		}
-		else if (StfH1Vector == stfVecLow) {
-			vec = "Low";
-		}
-
-		PrintStr("STF H1 Vector: " + vec);
 	}
+}
+
+string boolToStr(bool b) {
+	return b ? "OK" : "NG";
 }
 
 bool StfFilterLong() {
@@ -665,10 +762,63 @@ bool IkeIkeFilterLong() {
 	}
 }
 
-bool CanLongEntry() {
+bool W1PPRewardFilterLong(double et, double tp) {
+	if (!PPW1RRFilter) {
+		return true;
+	}
+
+	double r2 = ppW1->R2();
+	double r3 = ppW1->R3();
+	if (r2 <= 0 || r3 <= 0) {
+		return true;
+	}
+
+	if (et < r2 && (tp > r2 || tp > r3)) {
+		return false;
+	}
+
+	if (et >= r2 && tp > r3) {
+		return false;
+	}
+	
+	return true;
+}
+
+bool D1PPRewardFilterLong(double et, double tp) {
+	if (!PPD1RRFilter) {
+		return true;
+	}
+
+	double r2 = ppD1->R2();
+	double r3 = ppD1->R3();
+	if (r2 <= 0 || r3 <= 0) {
+		return true;
+	}
+
+	if (et < r2 && (tp > r2 || tp > r3)) {
+		return false;
+	}
+
+	if (et >= r2 && tp > r3) {
+		return false;
+	}
+
+	return true;
+}
+
+bool CanLongEntry(double et, double tp) {
 	bool stfFilter = StfFilterLong();
 	bool ikeikeFilter = IkeIkeFilterLong();
-	return (stfFilter && ikeikeFilter);
+	bool w1PPRRFilter = W1PPRewardFilterLong(et, tp);
+	bool d1PPRRFilter = D1PPRewardFilterLong(et, tp);
+
+	string msg = "[ CanLongEntry ]STF Filter:" + boolToStr(stfFilter) +
+		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
+		" / W1 PP Filter:" + boolToStr(w1PPRRFilter) +
+		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
+	PrintStr(msg);
+
+	return (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
 }
 
 bool StfFilterShort() {
@@ -719,8 +869,94 @@ bool IkeIkeFilterShort() {
 	}
 }
 
-bool CanShortEntry() {
+bool W1PPRewardFilterShort(double et, double tp) {
+	if (!PPW1RRFilter) {
+		return true;
+	}
+
+	double s2 = ppW1->S2();
+	double s3 = ppW1->S3();
+	if (s2 <= 0 || s3 <= 0) {
+		return true;
+	}
+
+	if (et > s2 && (tp < s2 || tp < s3)) {
+		return false;
+	}
+
+	if (et <= s2 && tp < s3) {
+		return false;
+	}
+
+	return true;
+}
+
+bool D1PPRewardFilterShort(double et, double tp) {
+	if (!PPD1RRFilter) {
+		return true;
+	}
+
+	double s2 = ppD1->S2();
+	double s3 = ppD1->S3();
+	if (s2 <= 0 || s3 <= 0) {
+		return true;
+	}
+
+	if (et > s2 && (tp < s2 || tp < s3)) {
+		return false;
+	}
+
+	if (et <= s2 && tp < s3) {
+		return false;
+	}
+
+	return true;
+}
+
+bool CanShortEntry(double et, double tp) {
 	bool stfFilter = StfFilterShort();
 	bool ikeikeFilter = IkeIkeFilterShort();
-	return (stfFilter && ikeikeFilter);
+	bool w1PPRRFilter = W1PPRewardFilterShort(et, tp);
+	bool d1PPRRFilter = D1PPRewardFilterShort(et, tp);
+
+	string msg = "[ CanShortEntry ]STF Filter:" + boolToStr(stfFilter) +
+		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
+		" / W1 PP Filter:" + boolToStr(w1PPRRFilter) +
+		" / D1 PP Filter:" + boolToStr(d1PPRRFilter);
+	PrintStr(msg);
+
+	return (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter);
+}
+
+string stfVectorStr(StfVector vec) {
+	switch (vec)
+	{
+	case stfVecUp:
+		return "UP";
+	case stfVecLow:
+		return "Down";
+	case stfVecNone:
+		return "None";
+	default:
+		return "None";
+	}
+}
+
+void ShowStatus() {
+	char* objName = "chrome_status";
+	if (!ObjectExists(objName)) {
+		ObjectCreate(objName, obj_Text, 0, Time(0), Close(0));
+		ObjectSet(objName, OBJPROP_SCREENCOORDS, 1);
+		ObjectSet(objName, OBJPROP_SCRHALIGNMENT, 600);
+		ObjectSet(objName, OBJPROP_SCRVALIGNMENT, 20);
+	}
+	// 右上にSTFのD,4H,1Hの向き、軌道
+	string text = "STF(D1): " + stfVectorStr(StfD1Vector) + "\r\n";
+	text += "STF(H4): " + stfVectorStr(StfH4Vector) + "\r\n";
+	text += "STF(H1): " + stfVectorStr(StfH1Vector);
+	
+	char* cstr = new char[text.size() + 1];
+	char_traits<char>::copy(cstr, text.c_str(), text.size() + 1);
+	ObjectSetText(objName, cstr, 10, "Meiryo UI", RGB(0xff, 0xff, 0xff));
+	delete[] cstr;
 }
