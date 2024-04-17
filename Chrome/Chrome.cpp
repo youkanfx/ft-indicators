@@ -437,61 +437,133 @@ bool PivotPoints::Calculate() {
 #pragma region Mesen
 enum MesenMode {
 	Simple,
+	YoriDow,
 };
 enum MesenVector {
-	mesenVectorUp,
-	mesenVectorDown,
-	mesenVectorUnknown,
+	mesenUe,
+	mesenShita,
+	mesenWakaranai,
+	mesenUeYorinoWakaranai,
+	mesenShitaYorinoWakaranai,
 };
 class Mesen {
 	MesenMode _mode;
 	int _timeFrame;
-	int _count;
+	int _limit;
+	int _lineColor;
 	double _mesenPrice;
-	MesenVector _currentVector;
-	MesenVector firstVector();
+	double _tipPrice;
+	double _mesenCandidatePrice;
+	MesenVector _currentMesen;
+	void judge(int index);
+	void firstVector();
 public:
-	Mesen(int timeFrame, int count);
+	Mesen(int timeFrame, int limit, int color);
 	MesenVector Vector();
+	double TipPrice();
 	double MesenPrice();
 };
 
-Mesen::Mesen(int timeFrame, int count = 100) {
+Mesen::Mesen(int timeFrame, int limit, int color) {
 	_mode = MesenMode::Simple;
 	_timeFrame = timeFrame;
-	_count = count;
+	_limit = limit;
 	_mesenPrice = 0;
-	_currentVector = firstVector();
+	_tipPrice = 0;
+	_lineColor = color;
+	_mesenCandidatePrice = 0;
+	firstVector();
 }
 
-MesenVector Mesen::firstVector() {
-	int barCount = iBars(Symbol(), _timeFrame);
-	if (barCount > _count) {
-		barCount = _count;
+void Mesen::judge(int index) {
+	// 現在、シンプル目線の実装のみ
+	if (_tipPrice == 0 || _mesenPrice == 0) {
+		return;
 	}
 
-	bool preYousen = iOpen(Symbol(), _timeFrame, barCount) < iClose(Symbol(), _timeFrame, barCount);
-	double tmpMesenPrice = 0;
-	for (int i = (barCount - 1); i > 0; i--) {
-		double open = iOpen(Symbol(), _timeFrame, i);
-		double close = iClose(Symbol(), _timeFrame, i);
-		bool currentYousen = open < close;
-
-		if (preYousen != currentYousen) {
-
+	double open = iOpen(Symbol(), _timeFrame, index);
+	double close = iClose(Symbol(), _timeFrame, index);
+	if (_currentMesen == mesenUe) {
+		// 高値更新
+		if (_tipPrice < close) {
+			// 高値ラインと目線ラインを更新
+			_tipPrice = close;
+			if (_mesenCandidatePrice > 0) {
+				_mesenPrice = _mesenCandidatePrice;
+				_mesenCandidatePrice = 0;
+			}
 		}
+		// 押し安値割り
+		else if (_mesenPrice > close) {
+			_currentMesen = mesenShita;
+			_mesenPrice = _tipPrice;
+			_tipPrice = close;
+			_mesenCandidatePrice = 0;
+		}
+		// 高値更新、目線ライン更新無し
+		else if (_tipPrice >= close && _mesenPrice <= close) {
+			// 陰線の場合は終値が目線ライン候補
+			if (open > close) {
+				_mesenCandidatePrice = close;
+			}
+		}
+	}
+	else if (_currentMesen == mesenShita) {
+		// 安値更新
+		if (_tipPrice > close) {
+			// 安値ラインと目線ラインを更新
+			_tipPrice = close;
+			if (_mesenCandidatePrice > 0) {
+				_mesenPrice = _mesenCandidatePrice;
+				_mesenCandidatePrice = 0;
+			}
+		}
+		// 戻り高値越え
+		else if (_mesenPrice < close) {
+			_currentMesen = mesenUe;
+			_mesenPrice = _tipPrice;
+			_tipPrice = close;
+			_mesenCandidatePrice = 0;
+		}
+		// 安値更新、目線ライン更新無し
+		else if (_tipPrice <= close && _mesenPrice >= close) {
+			// 陽線の場合は終値が目線ライン候補
+			if (open < close) {
+				_mesenCandidatePrice = close;
+			}
+		}
+	}
+	else {
+		// 今のところ未実装
+	}
+}
 
-		preYousen = currentYousen;
+void Mesen::firstVector() {
+	int barCount = iBars(Symbol(), _timeFrame);
+	if (barCount > _limit) {
+		barCount = _limit;
+	}
+
+	// 遡ったローソク足の陰陽で暫定目線を決定
+	double firstOpen = iOpen(Symbol(), _timeFrame, barCount);
+	double firstClose = iClose(Symbol(), _timeFrame, barCount);
+	_currentMesen = firstOpen < firstClose ? mesenUe : mesenShita;
+	_tipPrice = firstClose;
+	_mesenPrice = firstOpen;
+	_mesenCandidatePrice = 0;
+
+	for (int i = (barCount - 1); i >= 0; i--) {
+		judge(i);
 	}
 }
 
 MesenVector Mesen::Vector() {
-	int barCount = iBars(Symbol(), _timeFrame);
-	MesenVector vec = mesenVectorUnknown;
+	judge(1);
+	return _currentMesen;
+}
 
-	for (int i = 1; i < barCount; i++) {
-	}
-	return vec;
+double Mesen::TipPrice() {
+	return _tipPrice;
 }
 
 double Mesen::MesenPrice() {
@@ -515,6 +587,10 @@ StfOrbit StfD1Orbit = stfOrbitUnknown;
 StfOrbit StfH4Orbit = stfOrbitUnknown;
 StfOrbit StfH1Orbit = stfOrbitUnknown;
 
+MesenVector MesenD1Vector = mesenWakaranai;
+MesenVector MesenH4Vector = mesenWakaranai;
+MesenVector MesenH1Vector = mesenWakaranai;
+
 void UpperCafeaulait(BBPrices bb);
 void LowerCafeaulait(BBPrices bb);
 
@@ -536,6 +612,9 @@ Stf* stfH4;
 Stf* stfH1;
 Cafeaulait* upCafe;
 Cafeaulait* lowCafe;
+Mesen* meD1;
+Mesen* meH4;
+Mesen* meH1;
 
 bool StfD1Filter;
 bool StfH4Filter;
@@ -549,6 +628,9 @@ bool PPW1RRFilter;
 bool PPD1RRFilter;
 bool IsShowStatus;
 bool ReverseFilter;
+bool MesenD1Filter;
+bool MesenH4Filter;
+bool MesenH1Filter;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -575,17 +657,26 @@ EXPORT void __stdcall InitStrategy()
   RegOption("D1 STF Orbit Filter", ot_Boolean, &StfOrbitD1Filter);
   StfOrbitD1Filter = true;
 
+  RegOption("D1 Mesen Filter", ot_Boolean, &MesenD1Filter);
+  MesenD1Filter = true;
+
   RegOption("H4 STF Filter", ot_Boolean, &StfH4Filter);
   StfH4Filter = true;
 
   RegOption("H4 STF Orbit Filter", ot_Boolean, &StfOrbitH4Filter);
   StfOrbitH4Filter = false;
 
+  RegOption("H4 Mesen Filter", ot_Boolean, &MesenH4Filter);
+  MesenH4Filter = true;
+
   RegOption("H1 STF Filter", ot_Boolean, &StfH1Filter);
   StfH1Filter = true;
 
   RegOption("H1 STF Orbit Filter", ot_Boolean, &StfOrbitH1Filter);
   StfOrbitH1Filter = false;
+
+  RegOption("H1 Mesen Filter", ot_Boolean, &MesenH1Filter);
+  MesenH1Filter = true;
 
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
@@ -613,6 +704,10 @@ EXPORT void __stdcall InitStrategy()
   stfH1 = new Stf(Symbol(), PERIOD_H1, bbPeriod);
   ppW1 = new PivotPoints(Symbol(), PERIOD_W1);
   ppD1 = new PivotPoints(Symbol(), PERIOD_D1);
+  int limit = 100;
+  meD1 = new Mesen(PERIOD_D1, limit, RGB(0xFF, 0x00, 0x00));
+  meH4 = new Mesen(PERIOD_H4, limit, RGB(0x00, 0xFF, 0x00));
+  meH1 = new Mesen(PERIOD_H1, limit, RGB(0x00, 0x00, 0xFF));
 }
 
 EXPORT void __stdcall DoneStrategy()
@@ -623,6 +718,9 @@ EXPORT void __stdcall DoneStrategy()
 	delete stfH1;
 	delete ppW1;
 	delete ppD1;
+	delete meD1;
+	delete meH4;
+	delete meH1;
 	if (ObjectExists("chrome_status")) {
 		ObjectDelete("chrome_status");
 	}
@@ -849,6 +947,7 @@ void D1Setting() {
 		StfD1Orbit = stfD1->GetOrbit();
 		ppD1->Calculate();
 		Print("Calculate D1 PP!!");
+		MesenD1Vector = meD1->Vector();
 	}
 }
 
@@ -863,6 +962,7 @@ void H4Setting() {
 
 		StfH4Vector = stfH4->GetVector();
 		StfH4Orbit = stfH4->GetOrbit();
+		MesenH4Vector = meH4->Vector();
 	}
 }
 
@@ -877,6 +977,7 @@ void H1Setting() {
 		
 		StfH1Vector = stfH1->GetVector();
 		StfH1Orbit = stfH1->GetOrbit();
+		MesenH1Vector = meH1->Vector();
 	}
 }
 
@@ -988,6 +1089,18 @@ bool StfOrbitFilterLong(bool enableFilter, StfOrbit orbit) {
 	return true;
 }
 
+bool MesenFilterLong(bool enableFilter, MesenVector vector) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (vector != mesenUe) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanLongEntry(double et, double tp) {
 	bool stfFilter = StfFilterLong();
 	bool ikeikeFilter = IkeIkeFilterLong();
@@ -996,6 +1109,9 @@ bool CanLongEntry(double et, double tp) {
 	bool d1OrbitFilter = StfOrbitFilterLong(StfOrbitD1Filter, StfD1Orbit);
 	bool h4OrbitFilter = StfOrbitFilterLong(StfOrbitH4Filter, StfH4Orbit);
 	bool h1OrbitFilter = StfOrbitFilterLong(StfOrbitH1Filter, StfH1Orbit);
+	bool d1MesenFilter = MesenFilterLong(MesenD1Filter, MesenD1Vector);
+	bool h4MesenFilter = MesenFilterLong(MesenH4Filter, MesenH4Vector);
+	bool h1MesenFilter = MesenFilterLong(MesenH1Filter, MesenH1Vector);
 
 	string msg = "[ CanLongEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
@@ -1003,11 +1119,16 @@ bool CanLongEntry(double et, double tp) {
 		" / D1 PP Filter:" + boolToStr(d1PPRRFilter) +
 		" / D1 Orbit Filter:" + boolToStr(d1OrbitFilter) +
 		" / H4 Orbit Filter:" + boolToStr(h4OrbitFilter) +
-		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter);
+		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter) +
+		" / D1 Mesen Filter:" + boolToStr(d1MesenFilter) +
+		" / H4 Mesen Filter:" + boolToStr(h4MesenFilter) +
+		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter)
+		;
 	PrintStr(msg);
 
 	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
-					d1OrbitFilter && h4OrbitFilter && h1OrbitFilter);
+					d1OrbitFilter && h4OrbitFilter && h1OrbitFilter &&
+					d1MesenFilter && h4MesenFilter && h1MesenFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
@@ -1115,6 +1236,18 @@ bool StfOrbitFilterShort(bool enableFilter, StfOrbit orbit) {
 	return true;
 }
 
+bool MesenFilterShort(bool enableFilter, MesenVector vector) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (vector != mesenShita) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanShortEntry(double et, double tp) {
 	bool stfFilter = StfFilterShort();
 	bool ikeikeFilter = IkeIkeFilterShort();
@@ -1123,6 +1256,9 @@ bool CanShortEntry(double et, double tp) {
 	bool d1OrbitFilter = StfOrbitFilterShort(StfOrbitD1Filter, StfD1Orbit);
 	bool h4OrbitFilter = StfOrbitFilterShort(StfOrbitH4Filter, StfH4Orbit);
 	bool h1OrbitFilter = StfOrbitFilterShort(StfOrbitH1Filter, StfH1Orbit);
+	bool d1MesenFilter = MesenFilterShort(MesenD1Filter, MesenD1Vector);
+	bool h4MesenFilter = MesenFilterShort(MesenH4Filter, MesenH4Vector);
+	bool h1MesenFilter = MesenFilterShort(MesenH1Filter, MesenH1Vector);
 
 	string msg = "[ CanShortEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
@@ -1130,11 +1266,16 @@ bool CanShortEntry(double et, double tp) {
 		" / D1 PP Filter:" + boolToStr(d1PPRRFilter) +
 		" / D1 Orbit Filter:" + boolToStr(d1OrbitFilter) +
 		" / H4 Orbit Filter:" + boolToStr(h4OrbitFilter) +
-		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter);
+		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter) +
+		" / D1 Mesen Filter:" + boolToStr(d1MesenFilter) +
+		" / H4 Mesen Filter:" + boolToStr(h4MesenFilter) +
+		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter)
+		;
 	PrintStr(msg);
 
 	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
-		d1OrbitFilter && h4OrbitFilter && h1OrbitFilter);
+		d1OrbitFilter && h4OrbitFilter && h1OrbitFilter &&
+		d1MesenFilter && h4MesenFilter && h1MesenFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
@@ -1152,21 +1293,53 @@ string stfVectorStr(StfVector vec) {
 	}
 }
 
+string stfOrbitStr(StfOrbit orbit) {
+	switch (orbit)
+	{
+	case stfOrbitUp:
+		return "UP";
+	case stfOrbitDown:
+		return "Down";
+	case stfOrbitUnknown:
+		return "None";
+	default:
+		return "None";
+	}
+}
+
+string mesenStr(MesenVector mesen) {
+	switch (mesen)
+	{
+	case mesenUe:
+		return "UP";
+	case mesenShita:
+		return "Down";
+	default:
+		return "None";
+	}
+}
+
 void ShowStatus() {
 	char* objName = "chrome_status";
 	if (!ObjectExists(objName)) {
 		ObjectCreate(objName, obj_Text, 0, Time(0), Close(0));
 		ObjectSet(objName, OBJPROP_SCREENCOORDS, 1);
-		ObjectSet(objName, OBJPROP_SCRHALIGNMENT, 600);
-		ObjectSet(objName, OBJPROP_SCRVALIGNMENT, 20);
+		ObjectSet(objName, OBJPROP_SCRHALIGNMENT, 800);
+		ObjectSet(objName, OBJPROP_SCRVALIGNMENT, 50);
 	}
 	// 右上にSTFのD,4H,1Hの向き、軌道
-	string text = "STF(D1): " + stfVectorStr(StfD1Vector) + "\r\n";
-	text += "STF(H4): " + stfVectorStr(StfH4Vector) + "\r\n";
-	text += "STF(H1): " + stfVectorStr(StfH1Vector);
+	string text = "D1: [STF(VEC)]" + stfVectorStr(StfD1Vector);
+	text += " [STF(ORBIT)]" + stfOrbitStr(StfD1Orbit);
+	text += " [MESEN]" + mesenStr(MesenD1Vector) + "\r\n";
+	text += "H4: [STF(VEC)]" + stfVectorStr(StfH4Vector);
+	text += " [STF(ORBIT)]" + stfOrbitStr(StfH4Orbit);
+	text += " [MESEN]" + mesenStr(MesenH4Vector) + "\r\n";
+	text += "H1: [STF(VEC)]" + stfVectorStr(StfH1Vector);
+	text += " [STF(ORBIT)]" + stfOrbitStr(StfH1Orbit);
+	text += " [MESEN]" + mesenStr(MesenH1Vector);
 	
 	char* cstr = new char[text.size() + 1];
 	char_traits<char>::copy(cstr, text.c_str(), text.size() + 1);
-	ObjectSetText(objName, cstr, 10, "Meiryo UI", RGB(0xff, 0xff, 0xff));
+	ObjectSetText(objName, cstr, 8, "Meiryo UI", RGB(0xff, 0xff, 0xff));
 	delete[] cstr;
 }
