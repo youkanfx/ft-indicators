@@ -476,16 +476,20 @@ Mesen::Mesen(int timeFrame, int limit, int color) {
 }
 
 void Mesen::judge(int index) {
+	string logprefix = "[ " + to_string(_timeFrame) + "Mesen ]";
 	// 現在、シンプル目線の実装のみ
 	if (_tipPrice == 0 || _mesenPrice == 0) {
+		PrintStr(logprefix + "TipPrice And MesenPrice = 0");
 		return;
 	}
 
 	double open = iOpen(Symbol(), _timeFrame, index);
 	double close = iClose(Symbol(), _timeFrame, index);
+	
 	if (_currentMesen == mesenUe) {
 		// 高値更新
 		if (_tipPrice < close) {
+			PrintStr(logprefix + "Takane Koushin");
 			// 高値ラインと目線ラインを更新
 			_tipPrice = close;
 			if (_mesenCandidatePrice > 0) {
@@ -495,6 +499,7 @@ void Mesen::judge(int index) {
 		}
 		// 押し安値割り
 		else if (_mesenPrice > close) {
+			PrintStr(logprefix + "OshiYasune Wari");
 			_currentMesen = mesenShita;
 			_mesenPrice = _tipPrice;
 			_tipPrice = close;
@@ -504,6 +509,7 @@ void Mesen::judge(int index) {
 		else if (_tipPrice >= close && _mesenPrice <= close) {
 			// 陰線の場合は終値が目線ライン候補
 			if (open > close) {
+				PrintStr(logprefix + "Mesen Line Kouho Koushin");
 				_mesenCandidatePrice = close;
 			}
 		}
@@ -511,6 +517,7 @@ void Mesen::judge(int index) {
 	else if (_currentMesen == mesenShita) {
 		// 安値更新
 		if (_tipPrice > close) {
+			PrintStr(logprefix + "Yasune Koushin");
 			// 安値ラインと目線ラインを更新
 			_tipPrice = close;
 			if (_mesenCandidatePrice > 0) {
@@ -520,6 +527,7 @@ void Mesen::judge(int index) {
 		}
 		// 戻り高値越え
 		else if (_mesenPrice < close) {
+			PrintStr(logprefix + "ModoriTakane Goe");
 			_currentMesen = mesenUe;
 			_mesenPrice = _tipPrice;
 			_tipPrice = close;
@@ -529,12 +537,14 @@ void Mesen::judge(int index) {
 		else if (_tipPrice <= close && _mesenPrice >= close) {
 			// 陽線の場合は終値が目線ライン候補
 			if (open < close) {
+				PrintStr(logprefix + "Mesen Line Kouho Koushin");
 				_mesenCandidatePrice = close;
 			}
 		}
 	}
 	else {
 		// 今のところ未実装
+		PrintStr(logprefix + "No Logic");
 	}
 }
 
@@ -551,6 +561,11 @@ void Mesen::firstVector() {
 	_tipPrice = firstClose;
 	_mesenPrice = firstOpen;
 	_mesenCandidatePrice = 0;
+
+	PrintStr("[ " + to_string(_timeFrame) + "Mesen ]" +
+		"TipPrice:" + to_string(_tipPrice) +
+		"MesenPrice:" + to_string(_mesenPrice)
+	);
 
 	for (int i = (barCount - 1); i >= 0; i--) {
 		judge(i);
@@ -667,7 +682,7 @@ EXPORT void __stdcall InitStrategy()
   StfOrbitH4Filter = false;
 
   RegOption("H4 Mesen Filter", ot_Boolean, &MesenH4Filter);
-  MesenH4Filter = true;
+  MesenH4Filter = false;
 
   RegOption("H1 STF Filter", ot_Boolean, &StfH1Filter);
   StfH1Filter = true;
@@ -676,7 +691,7 @@ EXPORT void __stdcall InitStrategy()
   StfOrbitH1Filter = false;
 
   RegOption("H1 Mesen Filter", ot_Boolean, &MesenH1Filter);
-  MesenH1Filter = true;
+  MesenH1Filter = false;
 
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
