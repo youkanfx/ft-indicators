@@ -454,6 +454,7 @@ class Mesen {
 	double _mesenPrice;
 	double _tipPrice;
 	double _mesenCandidatePrice;
+	bool _inited;
 	MesenVector _currentMesen;
 	void judge(int index);
 	void firstVector();
@@ -472,7 +473,7 @@ Mesen::Mesen(int timeFrame, int limit, int color) {
 	_tipPrice = 0;
 	_lineColor = color;
 	_mesenCandidatePrice = 0;
-	firstVector();
+	_inited = false;
 }
 
 void Mesen::judge(int index) {
@@ -554,9 +555,11 @@ void Mesen::firstVector() {
 		barCount = _limit;
 	}
 
+	int maxIndex = barCount - 1;
+
 	// ‘k‚Á‚½ƒ[ƒ\ƒN‘«‚Ì‰A—z‚Åb’è–Úü‚ğŒˆ’è
-	double firstOpen = iOpen(Symbol(), _timeFrame, barCount);
-	double firstClose = iClose(Symbol(), _timeFrame, barCount);
+	double firstOpen = iOpen(Symbol(), _timeFrame, maxIndex);
+	double firstClose = iClose(Symbol(), _timeFrame, maxIndex);
 	_currentMesen = firstOpen < firstClose ? mesenUe : mesenShita;
 	_tipPrice = firstClose;
 	_mesenPrice = firstOpen;
@@ -567,13 +570,20 @@ void Mesen::firstVector() {
 		"MesenPrice:" + to_string(_mesenPrice)
 	);
 
-	for (int i = (barCount - 1); i >= 0; i--) {
+	for (int i = maxIndex; i >= 0; i--) {
 		judge(i);
 	}
 }
 
 MesenVector Mesen::Vector() {
-	judge(1);
+	if (!_inited) {
+		firstVector();
+		_inited = true;
+		PrintStr("[ " + to_string(_timeFrame) + "Mesen ]Init!!");
+	}
+	else {
+		judge(1);
+	}
 	return _currentMesen;
 }
 
@@ -1345,13 +1355,19 @@ void ShowStatus() {
 	// ‰Eã‚ÉSTF‚ÌD,4H,1H‚ÌŒü‚«A‹O“¹
 	string text = "D1: [STF(VEC)]" + stfVectorStr(StfD1Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfD1Orbit);
-	text += " [MESEN]" + mesenStr(MesenD1Vector) + "\r\n";
+	text += " [MESEN]" + mesenStr(MesenD1Vector) +
+			" TIP("+ to_string(meD1->TipPrice()) + ")"
+			" MESEN(" + to_string(meD1->MesenPrice()) + ")" + "\r\n";
 	text += "H4: [STF(VEC)]" + stfVectorStr(StfH4Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfH4Orbit);
-	text += " [MESEN]" + mesenStr(MesenH4Vector) + "\r\n";
+	text += " [MESEN]" + mesenStr(MesenH4Vector) +
+			" TIP(" + to_string(meH4->TipPrice()) + ")"
+			" MESEN(" + to_string(meH4->MesenPrice()) + ")" + "\r\n";
 	text += "H1: [STF(VEC)]" + stfVectorStr(StfH1Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfH1Orbit);
-	text += " [MESEN]" + mesenStr(MesenH1Vector);
+	text += " [MESEN]" + mesenStr(MesenH1Vector) +
+			" TIP(" + to_string(meH1->TipPrice()) + ")"
+			" MESEN(" + to_string(meH1->MesenPrice()) + ")";
 	
 	char* cstr = new char[text.size() + 1];
 	char_traits<char>::copy(cstr, text.c_str(), text.size() + 1);
