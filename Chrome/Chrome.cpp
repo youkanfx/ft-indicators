@@ -458,11 +458,15 @@ class Mesen {
 	MesenVector _currentMesen;
 	void judge(int index);
 	void firstVector();
+	bool drawHline();
+	string periodName();
+	bool _showHline;
 public:
 	Mesen(int timeFrame, int limit, int color);
 	MesenVector Vector();
 	double TipPrice();
 	double MesenPrice();
+	void SetShowHline(bool isShow);
 };
 
 Mesen::Mesen(int timeFrame, int limit, int color) {
@@ -474,6 +478,7 @@ Mesen::Mesen(int timeFrame, int limit, int color) {
 	_lineColor = color;
 	_mesenCandidatePrice = 0;
 	_inited = false;
+	_showHline = true;
 }
 
 void Mesen::judge(int index) {
@@ -575,6 +580,51 @@ void Mesen::firstVector() {
 	}
 }
 
+string Mesen::periodName() {
+	switch (_timeFrame)
+	{
+	case 60:
+		return "1H";
+	case 240:
+		return "4H";
+	case 1440:
+		return "D1";
+	default:
+		return "?";
+	}
+}
+
+bool Mesen::drawHline() {
+	if (_tipPrice > 0) {
+		string objName = "tip_hline_tf" + to_string(_timeFrame);
+		char* tipLineName = const_cast<char*>(objName.c_str());
+		if (!ObjectExists(tipLineName)) {
+			if (!ObjectCreate(tipLineName, obj_HLine, 0, 0, _tipPrice)) {
+				return false;
+			}
+			ObjectSet(tipLineName, OBJPROP_COLOR, _lineColor);
+			ObjectSet(tipLineName, OBJPROP_STYLE, psDash);
+		}
+		else {
+			ObjectSet(tipLineName, OBJPROP_PRICE1, _tipPrice);
+		}
+	}
+
+	if (_mesenPrice > 0) {
+		string objName = "mesen_hline_tf" + to_string(_timeFrame);
+		char* mesenLineName = const_cast<char*>(objName.c_str());
+		if (!ObjectExists(mesenLineName)) {
+			if (!ObjectCreate(mesenLineName, obj_HLine, 0, 0, _mesenPrice)) {
+				return false;
+			}
+			ObjectSet(mesenLineName, OBJPROP_COLOR, _lineColor);
+		}
+		else {
+			ObjectSet(mesenLineName, OBJPROP_PRICE1, _mesenPrice);
+		}
+	}
+}
+
 MesenVector Mesen::Vector() {
 	if (!_inited) {
 		firstVector();
@@ -583,6 +633,10 @@ MesenVector Mesen::Vector() {
 	}
 	else {
 		judge(1);
+	}
+
+	if (_showHline) {
+		drawHline();
 	}
 	return _currentMesen;
 }
@@ -593,6 +647,10 @@ double Mesen::TipPrice() {
 
 double Mesen::MesenPrice() {
 	return _mesenPrice;
+}
+
+void Mesen::SetShowHline(bool isShow) {
+	_showHline = isShow;
 }
 #pragma endregion
 
@@ -656,6 +714,9 @@ bool ReverseFilter;
 bool MesenD1Filter;
 bool MesenH4Filter;
 bool MesenH1Filter;
+bool MesenD1ShowHline;
+bool MesenH4ShowHline;
+bool MesenH1ShowHline;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -685,6 +746,9 @@ EXPORT void __stdcall InitStrategy()
   RegOption("D1 Mesen Filter", ot_Boolean, &MesenD1Filter);
   MesenD1Filter = true;
 
+  RegOption("D1 Mesen Show HLine", ot_Boolean, &MesenD1ShowHline);
+  MesenD1ShowHline = true;
+
   RegOption("H4 STF Filter", ot_Boolean, &StfH4Filter);
   StfH4Filter = true;
 
@@ -694,6 +758,9 @@ EXPORT void __stdcall InitStrategy()
   RegOption("H4 Mesen Filter", ot_Boolean, &MesenH4Filter);
   MesenH4Filter = false;
 
+  RegOption("H4 Mesen Show HLine", ot_Boolean, &MesenH4ShowHline);
+  MesenH4ShowHline = true;
+
   RegOption("H1 STF Filter", ot_Boolean, &StfH1Filter);
   StfH1Filter = true;
 
@@ -702,6 +769,9 @@ EXPORT void __stdcall InitStrategy()
 
   RegOption("H1 Mesen Filter", ot_Boolean, &MesenH1Filter);
   MesenH1Filter = false;
+
+  RegOption("H1 Mesen Show HLine", ot_Boolean, &MesenH1ShowHline);
+  MesenH1ShowHline = true;
 
   RegOption("Timeframe", ot_TimeFrame, &Timeframe);
   Timeframe = PERIOD_M15;
@@ -752,7 +822,11 @@ EXPORT void __stdcall DoneStrategy()
 }
 
 EXPORT void __stdcall  ResetStrategy()
-{}
+{
+	meD1->SetShowHline(MesenD1ShowHline);
+	meH4->SetShowHline(MesenH4ShowHline);
+	meH1->SetShowHline(MesenH1ShowHline);
+}
 
 EXPORT void __stdcall GetSingleTick()
 {
