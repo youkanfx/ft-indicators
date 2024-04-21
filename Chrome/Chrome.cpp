@@ -451,6 +451,7 @@ class Mesen {
 	int _timeFrame;
 	int _limit;
 	int _lineColor;
+	double _resisapoPrice;
 	double _mesenPrice;
 	double _tipPrice;
 	double _mesenCandidatePrice;
@@ -461,11 +462,13 @@ class Mesen {
 	bool drawHline();
 	string periodName();
 	bool _showHline;
+	void resisapo();
 public:
 	Mesen(int timeFrame, int limit, int color);
 	MesenVector Vector();
 	double TipPrice();
 	double MesenPrice();
+	double ResisapoPrice();
 	void SetShowHline(bool isShow);
 };
 
@@ -473,6 +476,7 @@ Mesen::Mesen(int timeFrame, int limit, int color) {
 	_mode = MesenMode::Simple;
 	_timeFrame = timeFrame;
 	_limit = limit;
+	_resisapoPrice = 0;
 	_mesenPrice = 0;
 	_tipPrice = 0;
 	_lineColor = color;
@@ -554,6 +558,40 @@ void Mesen::judge(int index) {
 	}
 }
 
+void Mesen::resisapo() {
+	if (_currentMesen == mesenWakaranai) {
+		return;
+	}
+
+	if (_tipPrice <= 0 || _mesenPrice <= 0) {
+		return;
+	}
+
+	int barCount = iBars(Symbol(), _timeFrame);
+	if (barCount > _limit) {
+		barCount = _limit;
+	}
+
+	int maxIndex = barCount - 1;
+
+	for (int i = 0; i < maxIndex; i++) {
+		double open = iOpen(Symbol(), _timeFrame, i);
+		double close = iClose(Symbol(), _timeFrame, i);
+		if (_currentMesen == mesenUe) {
+			if (open < close && close > _tipPrice) {
+				_resisapoPrice = close;
+				return;
+			}
+		}
+		else if (_currentMesen == mesenShita) {
+			if (close < open && close < _tipPrice) {
+				_resisapoPrice = close;
+				return;
+			}
+		}
+	}
+}
+
 void Mesen::firstVector() {
 	int barCount = iBars(Symbol(), _timeFrame);
 	if (barCount > _limit) {
@@ -578,6 +616,8 @@ void Mesen::firstVector() {
 	for (int i = maxIndex; i >= 0; i--) {
 		judge(i);
 	}
+
+	resisapo();
 }
 
 string Mesen::periodName() {
@@ -623,6 +663,21 @@ bool Mesen::drawHline() {
 			ObjectSet(mesenLineName, OBJPROP_PRICE1, _mesenPrice);
 		}
 	}
+
+	if (_resisapoPrice > 0) {
+		string objName = "resisapo_hline_tf" + to_string(_timeFrame);
+		char* lineName = const_cast<char*>(objName.c_str());
+		if (!ObjectExists(lineName)) {
+			if (!ObjectCreate(lineName, obj_HLine, 0, 0, _resisapoPrice)) {
+				return false;
+			}
+			ObjectSet(lineName, OBJPROP_COLOR, _lineColor);
+			ObjectSet(lineName, OBJPROP_STYLE, psDash);
+		}
+		else {
+			ObjectSet(lineName, OBJPROP_PRICE1, _resisapoPrice);
+		}
+	}
 }
 
 MesenVector Mesen::Vector() {
@@ -634,6 +689,7 @@ MesenVector Mesen::Vector() {
 	else {
 		judge(1);
 	}
+	resisapo();
 
 	if (_showHline) {
 		drawHline();
@@ -657,6 +713,7 @@ void Mesen::SetShowHline(bool isShow) {
 
 #pragma region Global Parameters
 double OpenTime;
+double OpenTimeM1;
 double OpenTimeW1;
 double OpenTimeD1;
 double OpenTimeH4;
@@ -677,6 +734,7 @@ MesenVector MesenH1Vector = mesenWakaranai;
 void UpperCafeaulait(BBPrices bb);
 void LowerCafeaulait(BBPrices bb);
 
+void M1Setting();
 void W1Setting();
 void D1Setting();
 void H4Setting();
@@ -695,6 +753,8 @@ Stf* stfH4;
 Stf* stfH1;
 Cafeaulait* upCafe;
 Cafeaulait* lowCafe;
+Mesen* meM1;
+Mesen* meW1;
 Mesen* meD1;
 Mesen* meH4;
 Mesen* meH1;
@@ -800,6 +860,8 @@ EXPORT void __stdcall InitStrategy()
   ppW1 = new PivotPoints(Symbol(), PERIOD_W1);
   ppD1 = new PivotPoints(Symbol(), PERIOD_D1);
   int limit = 100;
+  meM1 = new Mesen(PERIOD_M1, limit, RGB(0xFF, 0x00, 0x00));
+  meW1 = new Mesen(PERIOD_W1, limit, RGB(0xFF, 0x00, 0x00));
   meD1 = new Mesen(PERIOD_D1, limit, RGB(0xFF, 0x00, 0x00));
   meH4 = new Mesen(PERIOD_H4, limit, RGB(0x00, 0xFF, 0x00));
   meH1 = new Mesen(PERIOD_H1, limit, RGB(0x00, 0x00, 0xFF));
@@ -831,6 +893,8 @@ EXPORT void __stdcall  ResetStrategy()
 EXPORT void __stdcall GetSingleTick()
 {
   SetCurrencyAndTimeframe(Symbol(), Timeframe);
+  // M1 Setting
+  M1Setting();
   // W1 Setting
   W1Setting();
   // D1 Setting
@@ -1019,6 +1083,19 @@ void LowerCafeaulait(BBPrices bbPrices) {
 	}
 }
 
+void M1Setting() {
+	double time = iTime(Symbol(), PERIOD_M1, 0);
+	if (OpenTimeM1 == NULL) {
+		OpenTimeM1 = time;
+	}
+
+	if (OpenTimeM1 != time) {
+		OpenTimeM1 = time;
+
+		meM1->Vector();
+	}
+}
+
 void W1Setting() {
 	double time = iTime(Symbol(), PERIOD_W1, 0);
 	if (OpenTimeW1 == NULL) {
@@ -1030,6 +1107,7 @@ void W1Setting() {
 
 		ppW1->Calculate();
 		Print("Calculate W1 PP!!");
+		meW1->Vector();
 	}
 }
 
