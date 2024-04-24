@@ -7,6 +7,8 @@
 #include <vector>
 #include <tchar.h>
 
+#define PERIOD_MO1 43200
+
 using namespace std;
 
 void PrintStr(string str) {
@@ -446,11 +448,19 @@ enum MesenVector {
 	mesenUeYorinoWakaranai,
 	mesenShitaYorinoWakaranai,
 };
+enum MesenDrawLine {
+	dl_All,
+	dl_MesenOnly,
+	dl_MesenAndResisapo,
+	dl_MesenAndTip,
+};
 class Mesen {
 	MesenMode _mode;
+	MesenDrawLine _drawline;
 	int _timeFrame;
 	int _limit;
 	int _lineColor;
+	int _lineStyle;
 	double _resisapoPrice;
 	double _mesenPrice;
 	double _tipPrice;
@@ -464,7 +474,7 @@ class Mesen {
 	bool _showHline;
 	void resisapo();
 public:
-	Mesen(int timeFrame, int limit, int color);
+	Mesen(int timeFrame, int limit, int linecolor, int linestyle, MesenDrawLine drawLine);
 	MesenVector Vector();
 	double TipPrice();
 	double MesenPrice();
@@ -472,17 +482,19 @@ public:
 	void SetShowHline(bool isShow);
 };
 
-Mesen::Mesen(int timeFrame, int limit, int color) {
+Mesen::Mesen(int timeFrame, int limit, int linecolor, int linestyle, MesenDrawLine drawLine) {
 	_mode = MesenMode::Simple;
 	_timeFrame = timeFrame;
 	_limit = limit;
 	_resisapoPrice = 0;
 	_mesenPrice = 0;
 	_tipPrice = 0;
-	_lineColor = color;
+	_lineColor = linecolor;
+	_lineStyle = linestyle;
 	_mesenCandidatePrice = 0;
 	_inited = false;
 	_showHline = true;
+	_drawline = drawLine;
 }
 
 void Mesen::judge(int index) {
@@ -635,18 +647,20 @@ string Mesen::periodName() {
 }
 
 bool Mesen::drawHline() {
-	if (_tipPrice > 0) {
-		string objName = "tip_hline_tf" + to_string(_timeFrame);
-		char* tipLineName = const_cast<char*>(objName.c_str());
-		if (!ObjectExists(tipLineName)) {
-			if (!ObjectCreate(tipLineName, obj_HLine, 0, 0, _tipPrice)) {
-				return false;
+	if (_drawline == dl_All || _drawline == dl_MesenAndTip) {
+		if (_tipPrice > 0) {
+			string objName = "tip_hline_tf" + to_string(_timeFrame);
+			char* tipLineName = const_cast<char*>(objName.c_str());
+			if (!ObjectExists(tipLineName)) {
+				if (!ObjectCreate(tipLineName, obj_HLine, 0, 0, _tipPrice)) {
+					return false;
+				}
+				ObjectSet(tipLineName, OBJPROP_COLOR, _lineColor);
+				ObjectSet(tipLineName, OBJPROP_STYLE, _lineStyle);
 			}
-			ObjectSet(tipLineName, OBJPROP_COLOR, _lineColor);
-			ObjectSet(tipLineName, OBJPROP_STYLE, psDash);
-		}
-		else {
-			ObjectSet(tipLineName, OBJPROP_PRICE1, _tipPrice);
+			else {
+				ObjectSet(tipLineName, OBJPROP_PRICE1, _tipPrice);
+			}
 		}
 	}
 
@@ -658,24 +672,27 @@ bool Mesen::drawHline() {
 				return false;
 			}
 			ObjectSet(mesenLineName, OBJPROP_COLOR, _lineColor);
+			ObjectSet(mesenLineName, OBJPROP_STYLE, _lineStyle);
 		}
 		else {
 			ObjectSet(mesenLineName, OBJPROP_PRICE1, _mesenPrice);
 		}
 	}
 
-	if (_resisapoPrice > 0) {
-		string objName = "resisapo_hline_tf" + to_string(_timeFrame);
-		char* lineName = const_cast<char*>(objName.c_str());
-		if (!ObjectExists(lineName)) {
-			if (!ObjectCreate(lineName, obj_HLine, 0, 0, _resisapoPrice)) {
-				return false;
+	if (_drawline == dl_All || _drawline == dl_MesenAndResisapo) {
+		if (_resisapoPrice > 0) {
+			string objName = "resisapo_hline_tf" + to_string(_timeFrame);
+			char* lineName = const_cast<char*>(objName.c_str());
+			if (!ObjectExists(lineName)) {
+				if (!ObjectCreate(lineName, obj_HLine, 0, 0, _resisapoPrice)) {
+					return false;
+				}
+				ObjectSet(lineName, OBJPROP_COLOR, _lineColor);
+				ObjectSet(lineName, OBJPROP_STYLE, _lineStyle);
 			}
-			ObjectSet(lineName, OBJPROP_COLOR, _lineColor);
-			ObjectSet(lineName, OBJPROP_STYLE, psDash);
-		}
-		else {
-			ObjectSet(lineName, OBJPROP_PRICE1, _resisapoPrice);
+			else {
+				ObjectSet(lineName, OBJPROP_PRICE1, _resisapoPrice);
+			}
 		}
 	}
 }
@@ -786,10 +803,26 @@ enum BBFilterType {
 };
 #pragma endregion
 
+enum EntryType {
+	et_Auto,
+	et_Manual
+};
+
+EntryType op_EntryType;
+
 EXPORT void __stdcall InitStrategy()
 {
   StrategyShortName("Chrome");
   StrategyDescription("Chrome Rule EA");
+
+  AddSeparator("Trigger");
+
+  RegOption("Entry", ot_EnumType, &op_EntryType);
+  AddOptionValue("Entry", "Auto");
+  AddOptionValue("Entry", "Manual");
+  op_EntryType = et_Auto;
+
+  AddSeparator("Filter");
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
@@ -860,11 +893,11 @@ EXPORT void __stdcall InitStrategy()
   ppW1 = new PivotPoints(Symbol(), PERIOD_W1);
   ppD1 = new PivotPoints(Symbol(), PERIOD_D1);
   int limit = 100;
-  meM1 = new Mesen(PERIOD_M1, limit, RGB(0xFF, 0x00, 0x00));
-  meW1 = new Mesen(PERIOD_W1, limit, RGB(0xFF, 0x00, 0x00));
-  meD1 = new Mesen(PERIOD_D1, limit, RGB(0xFF, 0x00, 0x00));
-  meH4 = new Mesen(PERIOD_H4, limit, RGB(0x00, 0xFF, 0x00));
-  meH1 = new Mesen(PERIOD_H1, limit, RGB(0x00, 0x00, 0xFF));
+  meM1 = new Mesen(PERIOD_MO1, limit, RGB(0xFF, 0xFF, 0xFF), psSolid, dl_MesenAndResisapo);
+  meW1 = new Mesen(PERIOD_W1, limit, RGB(0xFF, 0xFF, 0xFF), psDot, dl_MesenAndResisapo);
+  meD1 = new Mesen(PERIOD_D1, limit, RGB(0xFF, 0x00, 0x00), psSolid, dl_MesenAndResisapo);
+  meH4 = new Mesen(PERIOD_H4, limit, RGB(0xFF, 0x00, 0x00), psDot, dl_MesenOnly);
+  meH1 = new Mesen(PERIOD_H1, limit, RGB(0x00, 0x00, 0xFF), psSolid, dl_MesenOnly);
 }
 
 EXPORT void __stdcall DoneStrategy()
@@ -875,6 +908,8 @@ EXPORT void __stdcall DoneStrategy()
 	delete stfH1;
 	delete ppW1;
 	delete ppD1;
+	delete meM1;
+	delete meW1;
 	delete meD1;
 	delete meH4;
 	delete meH1;
@@ -988,8 +1023,13 @@ void UpperCafeaulait(BBPrices bbPrices) {
 				int oh;
 
 				if (CanLongEntry(et, tp)) {
-					if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
-						Print("long entry error!!");
+					if (op_EntryType == et_Auto) {
+						if (!SendInstantOrder(Symbol(), op_Buy, 0.01, root, tp, "", 0, oh)) {
+							Print("long entry error!!");
+						}
+					}
+					else {
+						Pause("Cafe!!");
 					}
 
 					delete upCafe;
@@ -1069,8 +1109,13 @@ void LowerCafeaulait(BBPrices bbPrices) {
 				int oh;
 
 				if (CanShortEntry(et, tp)) {
-					if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
-						Print("short entry error!!");
+					if (op_EntryType == et_Auto) {
+						if (!SendInstantOrder(Symbol(), op_Sell, 0.01, root, tp, "", 0, oh)) {
+							Print("short entry error!!");
+						}
+					}
+					else {
+						Pause("Cafe!!");
 					}
 
 					delete lowCafe;
@@ -1084,7 +1129,7 @@ void LowerCafeaulait(BBPrices bbPrices) {
 }
 
 void M1Setting() {
-	double time = iTime(Symbol(), PERIOD_M1, 0);
+	double time = iTime(Symbol(), PERIOD_MO1, 0);
 	if (OpenTimeM1 == NULL) {
 		OpenTimeM1 = time;
 	}
