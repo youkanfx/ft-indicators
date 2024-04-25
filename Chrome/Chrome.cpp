@@ -449,6 +449,7 @@ enum MesenVector {
 	mesenShitaYorinoWakaranai,
 };
 enum MesenDrawLine {
+	dl_None,
 	dl_All,
 	dl_MesenOnly,
 	dl_MesenAndResisapo,
@@ -479,7 +480,7 @@ public:
 	double TipPrice();
 	double MesenPrice();
 	double ResisapoPrice();
-	void SetShowHline(bool isShow);
+	void SetDrawLineType(MesenDrawLine drawline);
 };
 
 Mesen::Mesen(int timeFrame, int limit, int linecolor, int linestyle, MesenDrawLine drawLine) {
@@ -523,7 +524,20 @@ void Mesen::judge(int index) {
 		else if (_mesenPrice > close) {
 			PrintStr(logprefix + "OshiYasune Wari");
 			_currentMesen = mesenShita;
-			_mesenPrice = _tipPrice;
+			// 直近の陽線の終値が目線ライン
+			bool exists = false;
+			for (int i = (index + 1); i < _limit; i++) {
+				double open = iOpen(Symbol(), _timeFrame, i);
+				double close = iClose(Symbol(), _timeFrame, i);
+				if (open < close) {
+					_mesenPrice = close;
+					exists = true;
+					break;
+				}
+			}
+			if (!exists) {
+				_mesenPrice = _tipPrice;
+			}
 			_tipPrice = close;
 			_mesenCandidatePrice = 0;
 		}
@@ -551,7 +565,20 @@ void Mesen::judge(int index) {
 		else if (_mesenPrice < close) {
 			PrintStr(logprefix + "ModoriTakane Goe");
 			_currentMesen = mesenUe;
-			_mesenPrice = _tipPrice;
+			// 直近の陰線の終値が目線ライン
+			bool exists = false;
+			for (int i = (index + 1); i < _limit; i++) {
+				double open = iOpen(Symbol(), _timeFrame, i);
+				double close = iClose(Symbol(), _timeFrame, i);
+				if (open > close) {
+					_mesenPrice = close;
+					exists = true;
+					break;
+				}
+			}
+			if (!exists) {
+				_mesenPrice = _tipPrice;
+			}
 			_tipPrice = close;
 			_mesenCandidatePrice = 0;
 		}
@@ -585,22 +612,28 @@ void Mesen::resisapo() {
 	}
 
 	int maxIndex = barCount - 1;
-
+	bool existsResisapo = false;
 	for (int i = 0; i < maxIndex; i++) {
 		double open = iOpen(Symbol(), _timeFrame, i);
 		double close = iClose(Symbol(), _timeFrame, i);
 		if (_currentMesen == mesenUe) {
 			if (open < close && close > _tipPrice) {
 				_resisapoPrice = close;
-				return;
+				existsResisapo = true;
+				break;
 			}
 		}
 		else if (_currentMesen == mesenShita) {
 			if (close < open && close < _tipPrice) {
 				_resisapoPrice = close;
-				return;
+				existsResisapo = true;
+				break;
 			}
 		}
+	}
+
+	if (!existsResisapo) {
+		_resisapoPrice = 0;
 	}
 }
 
@@ -647,6 +680,10 @@ string Mesen::periodName() {
 }
 
 bool Mesen::drawHline() {
+	if (_drawline == dl_None) {
+		return true;
+	}
+
 	if (_drawline == dl_All || _drawline == dl_MesenAndTip) {
 		if (_tipPrice > 0) {
 			string objName = "tip_hline_tf" + to_string(_timeFrame);
@@ -656,7 +693,7 @@ bool Mesen::drawHline() {
 					return false;
 				}
 				ObjectSet(tipLineName, OBJPROP_COLOR, _lineColor);
-				ObjectSet(tipLineName, OBJPROP_STYLE, _lineStyle);
+				ObjectSet(tipLineName, OBJPROP_STYLE, psDash);
 			}
 			else {
 				ObjectSet(tipLineName, OBJPROP_PRICE1, _tipPrice);
@@ -680,21 +717,28 @@ bool Mesen::drawHline() {
 	}
 
 	if (_drawline == dl_All || _drawline == dl_MesenAndResisapo) {
+		string objName = "resisapo_hline_tf" + to_string(_timeFrame);
+		char* lineName = const_cast<char*>(objName.c_str());
 		if (_resisapoPrice > 0) {
-			string objName = "resisapo_hline_tf" + to_string(_timeFrame);
-			char* lineName = const_cast<char*>(objName.c_str());
 			if (!ObjectExists(lineName)) {
 				if (!ObjectCreate(lineName, obj_HLine, 0, 0, _resisapoPrice)) {
 					return false;
 				}
 				ObjectSet(lineName, OBJPROP_COLOR, _lineColor);
-				ObjectSet(lineName, OBJPROP_STYLE, _lineStyle);
+				ObjectSet(lineName, OBJPROP_STYLE, psDash);
 			}
 			else {
 				ObjectSet(lineName, OBJPROP_PRICE1, _resisapoPrice);
 			}
 		}
+		else {
+			if (ObjectExists(lineName)) {
+				ObjectDelete(lineName);
+			}
+		}
 	}
+
+	return true;
 }
 
 MesenVector Mesen::Vector() {
@@ -722,8 +766,8 @@ double Mesen::MesenPrice() {
 	return _mesenPrice;
 }
 
-void Mesen::SetShowHline(bool isShow) {
-	_showHline = isShow;
+void Mesen::SetDrawLineType(MesenDrawLine drawline) {
+	_drawline = drawline;
 }
 #pragma endregion
 
@@ -794,6 +838,11 @@ bool MesenH1Filter;
 bool MesenD1ShowHline;
 bool MesenH4ShowHline;
 bool MesenH1ShowHline;
+MesenDrawLine MesenM1DrawLine;
+MesenDrawLine MesenW1DrawLine;
+MesenDrawLine MesenD1DrawLine;
+MesenDrawLine MesenH4DrawLine;
+MesenDrawLine MesenH1DrawLine;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -817,12 +866,42 @@ EXPORT void __stdcall InitStrategy()
 
   AddSeparator("Trigger");
 
+  RegOption("Timeframe", ot_TimeFrame, &Timeframe);
+  Timeframe = PERIOD_M15;
+
   RegOption("Entry", ot_EnumType, &op_EntryType);
   AddOptionValue("Entry", "Auto");
   AddOptionValue("Entry", "Manual");
   op_EntryType = et_Auto;
 
-  AddSeparator("Filter");
+  RegOption("Reward Ratio", ot_Double, &RewardRatio);
+  RewardRatio = 1.0;
+  SetOptionRange("Reward Ratio", 0.5, 5.0);
+
+  AddSeparator("MO1 Filter");
+
+  RegOption("M1 Mesen DrawLine Type", ot_EnumType, &MesenM1DrawLine);
+  AddOptionValue("M1 Mesen DrawLine Type", "None");
+  AddOptionValue("M1 Mesen DrawLine Type", "All");
+  AddOptionValue("M1 Mesen DrawLine Type", "Mesen Only");
+  AddOptionValue("M1 Mesen DrawLine Type", "Mesen And Resisapo");
+  AddOptionValue("M1 Mesen DrawLine Type", "Mesen And Tip");
+  MesenM1DrawLine = dl_MesenAndResisapo;
+
+  AddSeparator("W1 Filter");
+
+  RegOption("W1 Mesen DrawLine Type", ot_EnumType, &MesenW1DrawLine);
+  AddOptionValue("W1 Mesen DrawLine Type", "None");
+  AddOptionValue("W1 Mesen DrawLine Type", "All");
+  AddOptionValue("W1 Mesen DrawLine Type", "Mesen Only");
+  AddOptionValue("W1 Mesen DrawLine Type", "Mesen And Resisapo");
+  AddOptionValue("W1 Mesen DrawLine Type", "Mesen And Tip");
+  MesenW1DrawLine = dl_MesenAndResisapo;
+
+  RegOption("W1 PivotPoints RR Filter", ot_Boolean, &PPW1RRFilter);
+  PPW1RRFilter = true;
+
+  AddSeparator("D1 Filter");
 
   RegOption("D1 STF Filter", ot_Boolean, &StfD1Filter);
   StfD1Filter = true;
@@ -839,8 +918,18 @@ EXPORT void __stdcall InitStrategy()
   RegOption("D1 Mesen Filter", ot_Boolean, &MesenD1Filter);
   MesenD1Filter = true;
 
-  RegOption("D1 Mesen Show HLine", ot_Boolean, &MesenD1ShowHline);
-  MesenD1ShowHline = true;
+  RegOption("D1 Mesen DrawLine Type", ot_EnumType, &MesenD1DrawLine);
+  AddOptionValue("D1 Mesen DrawLine Type", "None");
+  AddOptionValue("D1 Mesen DrawLine Type", "All");
+  AddOptionValue("D1 Mesen DrawLine Type", "Mesen Only");
+  AddOptionValue("D1 Mesen DrawLine Type", "Mesen And Resisapo");
+  AddOptionValue("D1 Mesen DrawLine Type", "Mesen And Tip");
+  MesenD1DrawLine = dl_MesenAndResisapo;
+
+  RegOption("D1 PivotPoints RR Filter", ot_Boolean, &PPD1RRFilter);
+  PPD1RRFilter = true;
+
+  AddSeparator("H4 Filter");
 
   RegOption("H4 STF Filter", ot_Boolean, &StfH4Filter);
   StfH4Filter = true;
@@ -851,8 +940,15 @@ EXPORT void __stdcall InitStrategy()
   RegOption("H4 Mesen Filter", ot_Boolean, &MesenH4Filter);
   MesenH4Filter = false;
 
-  RegOption("H4 Mesen Show HLine", ot_Boolean, &MesenH4ShowHline);
-  MesenH4ShowHline = true;
+  RegOption("H4 Mesen DrawLine Type", ot_EnumType, &MesenH4DrawLine);
+  AddOptionValue("H4 Mesen DrawLine Type", "None");
+  AddOptionValue("H4 Mesen DrawLine Type", "All");
+  AddOptionValue("H4 Mesen DrawLine Type", "Mesen Only");
+  AddOptionValue("H4 Mesen DrawLine Type", "Mesen And Resisapo");
+  AddOptionValue("H4 Mesen DrawLine Type", "Mesen And Tip");
+  MesenH4DrawLine = dl_MesenOnly;
+
+  AddSeparator("H1 Filter");
 
   RegOption("H1 STF Filter", ot_Boolean, &StfH1Filter);
   StfH1Filter = true;
@@ -863,21 +959,15 @@ EXPORT void __stdcall InitStrategy()
   RegOption("H1 Mesen Filter", ot_Boolean, &MesenH1Filter);
   MesenH1Filter = false;
 
-  RegOption("H1 Mesen Show HLine", ot_Boolean, &MesenH1ShowHline);
-  MesenH1ShowHline = true;
+  RegOption("H1 Mesen DrawLine Type", ot_EnumType, &MesenH1DrawLine);
+  AddOptionValue("H1 Mesen DrawLine Type", "None");
+  AddOptionValue("H1 Mesen DrawLine Type", "All");
+  AddOptionValue("H1 Mesen DrawLine Type", "Mesen Only");
+  AddOptionValue("H1 Mesen DrawLine Type", "Mesen And Resisapo");
+  AddOptionValue("H1 Mesen DrawLine Type", "Mesen And Tip");
+  MesenH1DrawLine = dl_MesenOnly;
 
-  RegOption("Timeframe", ot_TimeFrame, &Timeframe);
-  Timeframe = PERIOD_M15;
-
-  RegOption("Reward Ratio", ot_Double, &RewardRatio);
-  RewardRatio = 1.0;
-  SetOptionRange("Reward Ratio", 0.5, 5.0);
-
-  RegOption("W1 PivotPoints RR Filter", ot_Boolean, &PPW1RRFilter);
-  PPW1RRFilter = true;
-
-  RegOption("D1 PivotPoints RR Filter", ot_Boolean, &PPD1RRFilter);
-  PPD1RRFilter = true;
+  AddSeparator("Options");
 
   RegOption("Show Status", ot_Boolean, &IsShowStatus);
   IsShowStatus = true;
@@ -920,9 +1010,11 @@ EXPORT void __stdcall DoneStrategy()
 
 EXPORT void __stdcall  ResetStrategy()
 {
-	meD1->SetShowHline(MesenD1ShowHline);
-	meH4->SetShowHline(MesenH4ShowHline);
-	meH1->SetShowHline(MesenH1ShowHline);
+	meM1->SetDrawLineType(MesenM1DrawLine);
+	meW1->SetDrawLineType(MesenW1DrawLine);
+	meD1->SetDrawLineType(MesenD1DrawLine);
+	meH4->SetDrawLineType(MesenH4DrawLine);
+	meH1->SetDrawLineType(MesenH1DrawLine);
 }
 
 EXPORT void __stdcall GetSingleTick()
@@ -1253,6 +1345,7 @@ bool IkeIkeFilterLong() {
 			return true;
 		}
 	}
+	return false;
 }
 
 bool W1PPRewardFilterLong(double et, double tp) {
@@ -1400,6 +1493,7 @@ bool IkeIkeFilterShort() {
 			return true;
 		}
 	}
+	return false;
 }
 
 bool W1PPRewardFilterShort(double et, double tp) {
@@ -1552,19 +1646,13 @@ void ShowStatus() {
 	// 右上にSTFのD,4H,1Hの向き、軌道
 	string text = "D1: [STF(VEC)]" + stfVectorStr(StfD1Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfD1Orbit);
-	text += " [MESEN]" + mesenStr(MesenD1Vector) +
-			" TIP("+ to_string(meD1->TipPrice()) + ")"
-			" MESEN(" + to_string(meD1->MesenPrice()) + ")" + "\r\n";
+	text += " [MESEN]" + mesenStr(MesenD1Vector) + "\r\n";
 	text += "H4: [STF(VEC)]" + stfVectorStr(StfH4Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfH4Orbit);
-	text += " [MESEN]" + mesenStr(MesenH4Vector) +
-			" TIP(" + to_string(meH4->TipPrice()) + ")"
-			" MESEN(" + to_string(meH4->MesenPrice()) + ")" + "\r\n";
+	text += " [MESEN]" + mesenStr(MesenH4Vector) + "\r\n";
 	text += "H1: [STF(VEC)]" + stfVectorStr(StfH1Vector);
 	text += " [STF(ORBIT)]" + stfOrbitStr(StfH1Orbit);
-	text += " [MESEN]" + mesenStr(MesenH1Vector) +
-			" TIP(" + to_string(meH1->TipPrice()) + ")"
-			" MESEN(" + to_string(meH1->MesenPrice()) + ")";
+	text += " [MESEN]" + mesenStr(MesenH1Vector);
 	
 	char* cstr = new char[text.size() + 1];
 	char_traits<char>::copy(cstr, text.c_str(), text.size() + 1);
