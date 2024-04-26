@@ -1433,6 +1433,10 @@ bool ResiSapoFilterLong(bool enableFilter, double resisapoPrice, double tp) {
 		return true;
 	}
 
+	if (resisapoPrice <= 0) {
+		return true;
+	}
+
 	if (resisapoPrice < tp) {
 		return false;
 	}
@@ -1595,6 +1599,10 @@ bool MesenFilterShort(bool enableFilter, MesenVector vector) {
 
 bool ResiSapoFilterShort(bool enableFilter, double resisapoPrice, double tp) {
 	if (!enableFilter) {
+		return true;
+	}
+
+	if (resisapoPrice <= 0) {
 		return true;
 	}
 
