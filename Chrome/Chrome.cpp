@@ -766,6 +766,10 @@ double Mesen::MesenPrice() {
 	return _mesenPrice;
 }
 
+double Mesen::ResisapoPrice() {
+	return _resisapoPrice;
+}
+
 void Mesen::SetDrawLineType(MesenDrawLine drawline) {
 	_drawline = drawline;
 }
@@ -843,6 +847,8 @@ MesenDrawLine MesenW1DrawLine;
 MesenDrawLine MesenD1DrawLine;
 MesenDrawLine MesenH4DrawLine;
 MesenDrawLine MesenH1DrawLine;
+bool ResiSapoM1Filter;
+bool ResiSapoW1Filter;
 
 int IkeIkeFilterType;
 enum BBFilterType {
@@ -878,7 +884,10 @@ EXPORT void __stdcall InitStrategy()
   RewardRatio = 1.0;
   SetOptionRange("Reward Ratio", 0.5, 5.0);
 
-  AddSeparator("MO1 Filter");
+  AddSeparator("M1 Filter");
+
+  RegOption("M1 ResiSapo Filter", ot_Boolean, &ResiSapoM1Filter);
+  ResiSapoM1Filter = true;
 
   RegOption("M1 Mesen DrawLine Type", ot_EnumType, &MesenM1DrawLine);
   AddOptionValue("M1 Mesen DrawLine Type", "None");
@@ -889,6 +898,9 @@ EXPORT void __stdcall InitStrategy()
   MesenM1DrawLine = dl_MesenAndResisapo;
 
   AddSeparator("W1 Filter");
+
+  RegOption("M1 ResiSapo Filter", ot_Boolean, &ResiSapoW1Filter);
+  ResiSapoW1Filter = true;
 
   RegOption("W1 Mesen DrawLine Type", ot_EnumType, &MesenW1DrawLine);
   AddOptionValue("W1 Mesen DrawLine Type", "None");
@@ -1416,6 +1428,18 @@ bool MesenFilterLong(bool enableFilter, MesenVector vector) {
 	return true;
 }
 
+bool ResiSapoFilterLong(bool enableFilter, double resisapoPrice, double tp) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (resisapoPrice < tp) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanLongEntry(double et, double tp) {
 	bool stfFilter = StfFilterLong();
 	bool ikeikeFilter = IkeIkeFilterLong();
@@ -1427,6 +1451,8 @@ bool CanLongEntry(double et, double tp) {
 	bool d1MesenFilter = MesenFilterLong(MesenD1Filter, MesenD1Vector);
 	bool h4MesenFilter = MesenFilterLong(MesenH4Filter, MesenH4Vector);
 	bool h1MesenFilter = MesenFilterLong(MesenH1Filter, MesenH1Vector);
+	bool m1ResiSapoFilter = ResiSapoFilterLong(ResiSapoM1Filter, meM1->ResisapoPrice(), tp);
+	bool w1ResiSapoFilter = ResiSapoFilterLong(ResiSapoW1Filter, meW1->ResisapoPrice(), tp);
 
 	string msg = "[ CanLongEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
@@ -1437,13 +1463,16 @@ bool CanLongEntry(double et, double tp) {
 		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter) +
 		" / D1 Mesen Filter:" + boolToStr(d1MesenFilter) +
 		" / H4 Mesen Filter:" + boolToStr(h4MesenFilter) +
-		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter)
+		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter) +
+		" / M1 ResiSapo Filter:" + boolToStr(m1ResiSapoFilter) +
+		" / W1 ResiSapo Filter:" + boolToStr(w1ResiSapoFilter)
 		;
 	PrintStr(msg);
 
 	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
 					d1OrbitFilter && h4OrbitFilter && h1OrbitFilter &&
-					d1MesenFilter && h4MesenFilter && h1MesenFilter);
+					d1MesenFilter && h4MesenFilter && h1MesenFilter &&
+					m1ResiSapoFilter && w1ResiSapoFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
@@ -1564,6 +1593,18 @@ bool MesenFilterShort(bool enableFilter, MesenVector vector) {
 	return true;
 }
 
+bool ResiSapoFilterShort(bool enableFilter, double resisapoPrice, double tp) {
+	if (!enableFilter) {
+		return true;
+	}
+
+	if (resisapoPrice > tp) {
+		return false;
+	}
+
+	return true;
+}
+
 bool CanShortEntry(double et, double tp) {
 	bool stfFilter = StfFilterShort();
 	bool ikeikeFilter = IkeIkeFilterShort();
@@ -1575,6 +1616,8 @@ bool CanShortEntry(double et, double tp) {
 	bool d1MesenFilter = MesenFilterShort(MesenD1Filter, MesenD1Vector);
 	bool h4MesenFilter = MesenFilterShort(MesenH4Filter, MesenH4Vector);
 	bool h1MesenFilter = MesenFilterShort(MesenH1Filter, MesenH1Vector);
+	bool m1ResiSapoFilter = ResiSapoFilterShort(ResiSapoM1Filter, meM1->ResisapoPrice(), tp);
+	bool w1ResiSapoFilter = ResiSapoFilterShort(ResiSapoW1Filter, meW1->ResisapoPrice(), tp);
 
 	string msg = "[ CanShortEntry ]STF Filter:" + boolToStr(stfFilter) +
 		" / IkeIke Filter:" + boolToStr(ikeikeFilter) +
@@ -1585,13 +1628,16 @@ bool CanShortEntry(double et, double tp) {
 		" / H1 Orbit Filter:" + boolToStr(h1OrbitFilter) +
 		" / D1 Mesen Filter:" + boolToStr(d1MesenFilter) +
 		" / H4 Mesen Filter:" + boolToStr(h4MesenFilter) +
-		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter)
+		" / H1 Mesen Filter:" + boolToStr(h1MesenFilter) +
+		" / M1 ResiSapo Filter:" + boolToStr(m1ResiSapoFilter) +
+		" / W1 ResiSapo Filter:" + boolToStr(w1ResiSapoFilter)
 		;
 	PrintStr(msg);
 
 	bool canEntry = (stfFilter && ikeikeFilter && w1PPRRFilter && d1PPRRFilter &&
 		d1OrbitFilter && h4OrbitFilter && h1OrbitFilter &&
-		d1MesenFilter && h4MesenFilter && h1MesenFilter);
+		d1MesenFilter && h4MesenFilter && h1MesenFilter &&
+		m1ResiSapoFilter && w1ResiSapoFilter);
 	return ReverseFilter ? !canEntry : canEntry;
 }
 
