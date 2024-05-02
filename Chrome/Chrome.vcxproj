@@ -153,8 +153,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BollingerBands.h" />
+    <ClInclude Include="Cafeaulait.h" />
+    <ClInclude Include="Chrome.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="Mesen.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="PivotPoints.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="Stf.h" />
     <ClInclude Include="StrategyInterfaceUnit.h" />
     <ClInclude Include="TechnicalFunctions.h" />
   </ItemGroup>

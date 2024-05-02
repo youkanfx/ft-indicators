@@ -9,6 +9,7 @@
 
 4. プロジェクトのプロパティ -> リンカー -> 入力 ->
    モジュール定義ファイル にdef ファイルのフルパスを設定
+   $(ProjectDir)\$(ProjectName).def
 
 5. dllmain.cpp を削除(エントリーポイントが重複するため)
 6. Ishimoku.cpp の 先頭に

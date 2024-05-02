@@ -1,15 +1,20 @@
 #include "pch.h"
 #include <windows.h>
 #include <malloc.h>
-#include "StrategyInterfaceUnit.h"
-#include "TechnicalFunctions.h"
 #include <string>
 #include <vector>
 #include <tchar.h>
-
-#define PERIOD_MO1 43200
+#include "StrategyInterfaceUnit.h"
+#include "TechnicalFunctions.h"
+#include "BollingerBands.h"
+#include "Cafeaulait.h"
+#include "Stf.h"
+#include "PivotPoints.h"
+#include "Mesen.h"
+#include "Chrome.h"
 
 using namespace std;
+using namespace Technical;
 
 void PrintStr(string str) {
 	char* cstr = new char[str.size() + 1];
@@ -19,27 +24,6 @@ void PrintStr(string str) {
 }
 
 #pragma region BollingerBands
-struct BBPrices {
-	double middle;
-	double upper1;
-	double lower1;
-	double upper2;
-	double lower2;
-	double upper3;
-	double lower3;
-};
-
-class BollingerBands {
-private:
-	int _timeFrame;
-	char* _symbol;
-	int _bbPeriod;
-	double GetSMA(int index);
-public:
-	BollingerBands(char* symbol, int timeFrame, int period);
-	BBPrices GetPrices(int index);
-};
-
 double BollingerBands::GetSMA(int index)
 {
 	double sum = 0;
@@ -80,24 +64,6 @@ BBPrices BollingerBands::GetPrices(int index)
 }
 #pragma endregion
 #pragma region Cafeaulait
-enum CafeaulaitState {
-	Exploded,
-	MiddleTouch,
-	Entried,
-};
-
-class Cafeaulait {
-private:
-	double _rootPrice;
-	double _topPrice;
-	CafeaulaitState _state;
-public:
-	Cafeaulait(double rootPrice, double topPrice);
-	void ModifyState(CafeaulaitState state);
-	CafeaulaitState GetState();
-	double GetRootPrice();
-	double GetTopPrice();
-};
 Cafeaulait::Cafeaulait(double rootPrice, double topPrice)
 {
 	_topPrice = topPrice;
@@ -124,41 +90,6 @@ double Cafeaulait::GetTopPrice() {
 }
 #pragma endregion
 #pragma region Stf
-enum StfArea {
-	areaUnknown,
-	areaUpperIkeIke,
-	areaLowerIkeIke,
-	areaUpperMiddle,
-	areaLowerMiddle,
-};
-
-enum StfOrbit {
-	stfOrbitUp,
-	stfOrbitDown,
-	stfOrbitUnknown
-};
-
-enum StfVector {
-	stfVecUp,
-	stfVecLow,
-	stfVecNone
-};
-
-class Stf {
-private:
-	char* _symbol;
-	int _timeFrame;
-	int _period;
-	BollingerBands* _bb;
-	StfArea _beforeStfArea;
-public:
-	Stf(char* symbol, int timeFrame, int period);
-	~Stf();
-	StfVector GetVector();
-	StfArea GetArea();
-	StfOrbit GetOrbit();
-};
-
 Stf::Stf(char* symbol, int timeFrame, int period){
 	_symbol = symbol;
 	_timeFrame = timeFrame;
@@ -381,29 +312,6 @@ StfOrbit Stf::GetOrbit() {
 }
 #pragma endregion
 #pragma region Pivot Points
-class PivotPoints {
-private:
-	char* _symbol;
-	int _timeFrame;
-	double _pp;
-	double _r1;
-	double _r2;
-	double _r3;
-	double _s1;
-	double _s2;
-	double _s3;
-public:
-	PivotPoints(char* symbol, int timeFrame);
-	bool Calculate();
-	double PP() { return _pp; };
-	double R1() { return _r1; };
-	double R2() { return _r2; };
-	double R3() { return _r3; };
-	double S1() { return _s1; };
-	double S2() { return _s2; };
-	double S3() { return _s3; };
-};
-
 PivotPoints::PivotPoints(char* symbol, int timeFrame) {
 	_symbol = symbol;
 	_timeFrame = timeFrame;
@@ -437,52 +345,6 @@ bool PivotPoints::Calculate() {
 }
 #pragma endregion
 #pragma region Mesen
-enum MesenMode {
-	Simple,
-	YoriDow,
-};
-enum MesenVector {
-	mesenUe,
-	mesenShita,
-	mesenWakaranai,
-	mesenUeYorinoWakaranai,
-	mesenShitaYorinoWakaranai,
-};
-enum MesenDrawLine {
-	dl_None,
-	dl_All,
-	dl_MesenOnly,
-	dl_MesenAndResisapo,
-	dl_MesenAndTip,
-};
-class Mesen {
-	MesenMode _mode;
-	MesenDrawLine _drawline;
-	int _timeFrame;
-	int _limit;
-	int _lineColor;
-	int _lineStyle;
-	double _resisapoPrice;
-	double _mesenPrice;
-	double _tipPrice;
-	double _mesenCandidatePrice;
-	bool _inited;
-	MesenVector _currentMesen;
-	void judge(int index);
-	void firstVector();
-	bool drawHline();
-	string periodName();
-	bool _showHline;
-	void resisapo();
-public:
-	Mesen(int timeFrame, int limit, int linecolor, int linestyle, MesenDrawLine drawLine);
-	MesenVector Vector();
-	double TipPrice();
-	double MesenPrice();
-	double ResisapoPrice();
-	void SetDrawLineType(MesenDrawLine drawline);
-};
-
 Mesen::Mesen(int timeFrame, int limit, int linecolor, int linestyle, MesenDrawLine drawLine) {
 	_mode = MesenMode::Simple;
 	_timeFrame = timeFrame;
@@ -775,15 +637,7 @@ void Mesen::SetDrawLineType(MesenDrawLine drawline) {
 }
 #pragma endregion
 
-
 #pragma region Global Parameters
-double OpenTime;
-double OpenTimeM1;
-double OpenTimeW1;
-double OpenTimeD1;
-double OpenTimeH4;
-double OpenTimeH1;
-
 StfVector StfD1Vector = stfVecNone;
 StfVector StfH4Vector = stfVecNone;
 StfVector StfH1Vector = stfVecNone;
@@ -799,17 +653,6 @@ MesenVector MesenH1Vector = mesenWakaranai;
 void UpperCafeaulait(BBPrices bb);
 void LowerCafeaulait(BBPrices bb);
 
-void M1Setting();
-void W1Setting();
-void D1Setting();
-void H4Setting();
-void H1Setting();
-
-bool CanLongEntry(double et, double tp);
-bool CanShortEntry(double et, double tp);
-
-void ShowStatus();
-
 PivotPoints* ppD1;
 PivotPoints* ppW1;
 BollingerBands *bb15m;
@@ -824,40 +667,17 @@ Mesen* meD1;
 Mesen* meH4;
 Mesen* meH1;
 
-bool StfD1Filter;
-bool StfH4Filter;
-bool StfH1Filter;
-bool StfOrbitD1Filter;
-bool StfOrbitH4Filter;
-bool StfOrbitH1Filter;
-int Timeframe;
-double RewardRatio;
-bool PPW1RRFilter;
-bool PPD1RRFilter;
-bool IsShowStatus;
-bool ReverseFilter;
-bool MesenD1Filter;
-bool MesenH4Filter;
-bool MesenH1Filter;
-bool MesenD1ShowHline;
-bool MesenH4ShowHline;
-bool MesenH1ShowHline;
 MesenDrawLine MesenM1DrawLine;
 MesenDrawLine MesenW1DrawLine;
 MesenDrawLine MesenD1DrawLine;
 MesenDrawLine MesenH4DrawLine;
 MesenDrawLine MesenH1DrawLine;
-bool ResiSapoM1Filter;
-bool ResiSapoW1Filter;
-bool ResiSapoD1Filter;
 
-int IkeIkeFilterType;
 enum BBFilterType {
 	None = 0,
 	IkeIkeOnly = 1,
 	NotIkeIkeOnly = 2,
 };
-#pragma endregion
 
 enum EntryType {
 	et_Auto,
@@ -865,6 +685,7 @@ enum EntryType {
 };
 
 EntryType op_EntryType;
+#pragma endregion
 
 EXPORT void __stdcall InitStrategy()
 {
@@ -1063,9 +884,6 @@ EXPORT void __stdcall GetSingleTick()
   }
 }
 
-int candlePeriod = 8;
-bool isExplodedLong = false;
-int candleCountLong = 0;
 void UpperCafeaulait(BBPrices bbPrices) {
 	double high = iHigh(Symbol(), Timeframe, 1);
 	if (!isExplodedLong && high >= bbPrices.upper2) {
@@ -1150,8 +968,6 @@ void UpperCafeaulait(BBPrices bbPrices) {
 	}
 }
 
-bool isExplodedShort = false;
-int candleCountShort = 0;
 void LowerCafeaulait(BBPrices bbPrices) {
 	double low = iLow(Symbol(), Timeframe, 1);
 	if (!isExplodedShort && low <= bbPrices.lower2) {
