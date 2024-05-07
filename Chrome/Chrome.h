@@ -1,4 +1,11 @@
 #pragma once
+#include "BollingerBands.h"
+#include "Cafeaulait.h"
+#include "Stf.h"
+#include "Mesen.h"
+#include "PivotPoints.h"
+
+using namespace Technical;
 
 #define PERIOD_MO1 43200
 
@@ -45,6 +52,54 @@ bool ResiSapoW1Filter;
 bool ResiSapoD1Filter;
 
 int IkeIkeFilterType;
+
+StfVector StfD1Vector = stfVecNone;
+StfVector StfH4Vector = stfVecNone;
+StfVector StfH1Vector = stfVecNone;
+
+StfOrbit StfD1Orbit = stfOrbitUnknown;
+StfOrbit StfH4Orbit = stfOrbitUnknown;
+StfOrbit StfH1Orbit = stfOrbitUnknown;
+
+MesenVector MesenD1Vector = mesenWakaranai;
+MesenVector MesenH4Vector = mesenWakaranai;
+MesenVector MesenH1Vector = mesenWakaranai;
+
+void UpperCafeaulait(BBPrices bb);
+void LowerCafeaulait(BBPrices bb);
+
+PivotPoints* ppD1;
+PivotPoints* ppW1;
+BollingerBands* bb15m;
+Stf* stfD1;
+Stf* stfH4;
+Stf* stfH1;
+Cafeaulait* upCafe;
+Cafeaulait* lowCafe;
+Mesen* meM1;
+Mesen* meW1;
+Mesen* meD1;
+Mesen* meH4;
+Mesen* meH1;
+
+MesenDrawLine MesenM1DrawLine;
+MesenDrawLine MesenW1DrawLine;
+MesenDrawLine MesenD1DrawLine;
+MesenDrawLine MesenH4DrawLine;
+MesenDrawLine MesenH1DrawLine;
+
+enum BBFilterType {
+	None = 0,
+	IkeIkeOnly = 1,
+	NotIkeIkeOnly = 2,
+};
+
+enum EntryType {
+	et_Auto,
+	et_Manual
+};
+
+EntryType op_EntryType;
 #pragma endregion
 
 #pragma region Cafeaulait
